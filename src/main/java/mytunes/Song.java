@@ -4,16 +4,20 @@ package mytunes;
  *
  * @author Jerry
  */
+
+import java.io.File;
+import com.mpatric.mp3agic.*;
+
 public class Song {
 
     private String title;
     private String artist;
     private String album;
-    private int year;
+    private String year;
     private String genre;
     private String comment;
 
-    public Song(String title, String artist, String album, int year, String genre, String comment) {
+    public Song(String title, String artist, String album, String year, String genre, String comment) {
         this.title = title;
         this.artist = artist;
         this.album = album;
@@ -35,7 +39,7 @@ public class Song {
         return album;
     }
 
-    public int getYear() {
+    public String getYear() {
         return year;
     }
 
@@ -60,7 +64,7 @@ public class Song {
         this.album = album;
     }
 
-    public void setYear(int year) {
+    public void setYear(String year) {
         this.year = year;
     }
 
@@ -70,5 +74,39 @@ public class Song {
 
     public void setComment(String comment) {
         this.comment = comment;
+    }
+    
+    public static Song extractMetaData(File mp3File) {
+        try {
+            Mp3File mp3 = new Mp3File(mp3File);
+            if (mp3.hasId3v1Tag()) {
+                ID3v1 tag = mp3.getId3v1Tag();
+                
+                return new Song(
+                        tag.getTitle(),
+                        tag.getArtist(),
+                        tag.getAlbum(),
+                        tag.getYear(),
+                        tag.getGenreDescription(),
+                        tag.getComment()
+                );
+            } else if (mp3.hasId3v2Tag()) { // ID3V2 tag
+                ID3v2 tag = mp3.getId3v2Tag();
+                
+                return new Song(
+                        tag.getTitle(),
+                        tag.getArtist(),
+                        tag.getAlbum(),
+                        tag.getYear(),
+                        tag.getGenreDescription(),
+                        tag.getComment()
+                );
+            } else { // no ID3 tag
+                return new Song (mp3File.getName(), "", "", "", "", "");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 }
