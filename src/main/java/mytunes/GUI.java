@@ -33,7 +33,13 @@ public class GUI extends JFrame {
 
         // Initialize table
         String[] columnNames = {"Title", "Artist", "Album", "Year", "Genre", "Comment"};
-        tableModel = new DefaultTableModel(columnNames, 0);
+        tableModel = new DefaultTableModel(columnNames, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                // Allow editing only for the Comment column
+                return column == 5;
+            }
+        };
         songTable = new JTable(tableModel);
         songTable.setFillsViewportHeight(true);
         songTableScrollPane = new JScrollPane(songTable);
@@ -118,7 +124,15 @@ public class GUI extends JFrame {
         // Load song data from database
         setSongs();
         
-        // Add songTable popup event handler
+        // Event Handler
+        songTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    popupMenu.show(e.getComponent(), e.getX(), e.getY());
+                }
+            }
+        });
 
         songTable.setGridColor(Color.BLACK);
         this.add(songTableScrollPane, BorderLayout.CENTER);
@@ -156,6 +170,7 @@ public class GUI extends JFrame {
         });
         
         popupMenu.add(addSong);
+        popupMenu.addSeparator();
         popupMenu.add(deleteSong);
     }
     
@@ -196,8 +211,6 @@ public class GUI extends JFrame {
             } else {
                 JOptionPane.showMessageDialog(null, "Failed to add the song to the database.", "Error", JOptionPane.ERROR_MESSAGE);
             }
-        } else {
-            JOptionPane.showMessageDialog(null, "Failed to extract metadata from the selected file.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
     
@@ -205,8 +218,14 @@ public class GUI extends JFrame {
         int selectedRow = songTable.getSelectedRow();
         if (selectedRow != -1) {
             String title = (String) tableModel.getValueAt(selectedRow, 0);
-            musicPlayer.deleteSong(title);
-            tableModel.removeRow(selectedRow);
+            boolean status = musicPlayer.deleteSong(title);
+            
+            // Check if song is successfully deleted
+            if (status) {
+                tableModel.removeRow(selectedRow);
+            } else {
+                JOptionPane.showMessageDialog(null, "Failed to delete the song in database.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
         } else {
             JOptionPane.showMessageDialog(null, "Please select a song to delete");
         }
