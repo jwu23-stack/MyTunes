@@ -5,14 +5,14 @@ package mytunes;
  * @author Jerry
  */
 import java.util.List;
-
 import java.awt.*;
 import java.awt.event.*;
-
 import javax.swing.*;
 import javax.swing.table.*;
-
 import java.io.File;
+import javafx.application.Platform;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 
 public class GUI extends JFrame {
     JPanel panel, buttonPanel;
@@ -54,6 +54,9 @@ public class GUI extends JFrame {
     }
 
     public void go() {
+        // Initialize JavaFX runtime
+        Platform.startup(() -> {});
+        
         this.setTitle("MyTunes");
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.setSize(1200, 700);
@@ -124,12 +127,28 @@ public class GUI extends JFrame {
         // Load song data from database
         setSongs();
         
-        // Event Handler
+        // Event Handlers
         songTable.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (SwingUtilities.isRightMouseButton(e)) {
                     popupMenu.show(e.getComponent(), e.getX(), e.getY());
+                }
+            }
+        });
+        
+        songTable.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
+            @Override 
+            public void valueChanged(ListSelectionEvent e) {
+                if (!e.getValueIsAdjusting()) {
+                    int selectedRow = songTable.getSelectedRow();
+                    if (selectedRow != -1) {
+                        String title = (String) tableModel.getValueAt(selectedRow, 0);
+                        Song selectedSong = musicPlayer.findSongByTitle(title);
+                        if (selectedSong != null) {
+                            musicPlayer.setSelectedSong(selectedSong, selectedRow);
+                        }
+                    }
                 }
             }
         });
@@ -139,6 +158,61 @@ public class GUI extends JFrame {
     }
 
     public void buildButtonPanel() {
+        // Event handlers
+        previous.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                musicPlayer.previousSong();
+            }
+        });
+        
+        play.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (musicPlayer.getSelectedSong() != null) {
+                    musicPlayer.playSong();
+                } else {
+                    JOptionPane.showMessageDialog(null, "No song selected.", "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+        
+        stop.addActionListener(new ActionListener(){
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                musicPlayer.stopPlaying();
+            }
+        });
+        
+        pause.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (musicPlayer.getSelectedSong() != null) {
+                    musicPlayer.pausePlaying();
+                } else {
+                    JOptionPane.showMessageDialog(null, "No song selected.", "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+        
+        unpause.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (musicPlayer.getSelectedSong() != null) {
+                    musicPlayer.resumePlaying();
+                } else {
+                    JOptionPane.showMessageDialog(null, "No song selected.", "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+        
+        next.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                musicPlayer.nextSong();
+            }
+        });
+        
         buttonPanel.setLayout(new FlowLayout());
         buttonPanel.add(previous);
         buttonPanel.add(play);
@@ -146,7 +220,6 @@ public class GUI extends JFrame {
         buttonPanel.add(pause);
         buttonPanel.add(unpause);
         buttonPanel.add(next);
-
         this.add(buttonPanel, BorderLayout.SOUTH);
     }
     

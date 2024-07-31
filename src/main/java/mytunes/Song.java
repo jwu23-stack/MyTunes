@@ -6,7 +6,11 @@ package mytunes;
  */
 
 import java.io.File;
+import java.io.IOException;
 import com.mpatric.mp3agic.*;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.file.*;
 
 public class Song {
 
@@ -79,7 +83,7 @@ public class Song {
     public static Song extractMetaData(File mp3File) {
         try {
             Mp3File mp3 = new Mp3File(mp3File);
-            if (mp3.hasId3v1Tag()) {
+            if (mp3.hasId3v1Tag()) { // ID3V1 tag
                 ID3v1 tag = mp3.getId3v1Tag();
                 
                 return new Song(
@@ -108,5 +112,16 @@ public class Song {
             e.printStackTrace();
             return null;
         }
+    }
+    
+    public String getFileURL() throws IOException, URISyntaxException {
+        // Construct path from Downloads directory and append MP3 file to path
+        Path path = Paths.get(System.getProperty("user.home"), "Downloads");
+        Path mp3FilePath = path.resolve(this.title + ".mp3");
+        
+        // Convert file path to URI
+        URI uri = mp3FilePath.toUri();
+        
+        return uri.toString();
     }
 }
