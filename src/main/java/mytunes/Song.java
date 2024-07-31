@@ -13,7 +13,6 @@ import java.net.URISyntaxException;
 import java.nio.file.*;
 
 public class Song {
-
     private String title;
     private String artist;
     private String album;

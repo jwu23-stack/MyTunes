@@ -6,6 +6,12 @@ package mytunes;
  */
 import java.util.List;
 import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
+import java.awt.dnd.DropTargetAdapter;
+import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.*;
 import javax.swing.*;
 import javax.swing.table.*;
@@ -55,8 +61,9 @@ public class GUI extends JFrame {
 
     public void go() {
         // Initialize JavaFX runtime
-        Platform.startup(() -> {});
-        
+        Platform.startup(() -> {
+        });
+
         this.setTitle("MyTunes");
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.setSize(1200, 700);
@@ -70,33 +77,40 @@ public class GUI extends JFrame {
 
         // Add Button Panel
         buildButtonPanel();
-        
+
         // Add Popup Component
         buildPopup();
 
         this.setVisible(true);
     }
 
-    public void buildMenu() {
+    private void buildMenu() {
         JMenu fileMenu = new JMenu("File");
         JMenuItem openAndPlay = new JMenuItem("Open Song");
         JMenuItem addSong = new JMenuItem("Add Song");
         JMenuItem deleteSong = new JMenuItem("Delete Song");
         JMenuItem exit = new JMenuItem("Exit");
-        
+
         // Event Handlers
-        addSong.addActionListener(new ActionListener() {
+        openAndPlay.addActionListener(new ActionListener() {
            @Override
            public void actionPerformed(ActionEvent e) {
-               handleAddSong();
+               handleOpenAndPlaySong();
            }
         });
         
+        addSong.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleAddSong();
+            }
+        });
+
         deleteSong.addActionListener(new ActionListener() {
-           @Override
-           public void actionPerformed(ActionEvent e) {
-               handleDeleteSong();
-           }
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleDeleteSong();
+            }
         });
 
         exit.addActionListener(new ActionListener() {
@@ -115,7 +129,7 @@ public class GUI extends JFrame {
         this.setJMenuBar(menubar);
     }
 
-    public void buildSongLibrary() {
+    private void buildSongLibrary() {
         // Adjust header render
         DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
         headerRenderer.setHorizontalAlignment(JLabel.CENTER);
@@ -126,7 +140,7 @@ public class GUI extends JFrame {
 
         // Load song data from database
         setSongs();
-        
+
         // Event Handlers
         songTable.addMouseListener(new MouseAdapter() {
             @Override
@@ -136,9 +150,9 @@ public class GUI extends JFrame {
                 }
             }
         });
-        
+
         songTable.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
-            @Override 
+            @Override
             public void valueChanged(ListSelectionEvent e) {
                 if (!e.getValueIsAdjusting()) {
                     int selectedRow = songTable.getSelectedRow();
@@ -153,11 +167,39 @@ public class GUI extends JFrame {
             }
         });
 
+        // Setup DropTarget for songTable (drag and drop)
+        DropTarget dropTarget = new DropTarget(songTable, new DropTargetAdapter() {
+            @Override
+            public void drop(DropTargetDropEvent e) {
+                try {
+                    e.acceptDrop(DnDConstants.ACTION_COPY);
+                    Transferable transferable = e.getTransferable();
+                    List<File> droppedFiles = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
+
+                    // Add mp3 files to database and refresh table
+                    for (File file : droppedFiles) {
+                        if (file.isFile() && file.getName().toLowerCase().endsWith(".mp3")) {
+                            boolean status = musicPlayer.addSong(file);
+                            if (status) {
+                                // Refresh JTable
+                                setSongs();
+                            } else {
+                                JOptionPane.showMessageDialog(null, "Failed to add the song '" + file.getName() + "' to the database.", "Error", JOptionPane.ERROR_MESSAGE);
+                                
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+
         songTable.setGridColor(Color.BLACK);
         this.add(songTableScrollPane, BorderLayout.CENTER);
     }
 
-    public void buildButtonPanel() {
+    private void buildButtonPanel() {
         // Event handlers
         previous.addActionListener(new ActionListener() {
             @Override
@@ -165,7 +207,7 @@ public class GUI extends JFrame {
                 musicPlayer.previousSong();
             }
         });
-        
+
         play.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -176,14 +218,14 @@ public class GUI extends JFrame {
                 }
             }
         });
-        
-        stop.addActionListener(new ActionListener(){
+
+        stop.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 musicPlayer.stopPlaying();
             }
         });
-        
+
         pause.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -194,7 +236,7 @@ public class GUI extends JFrame {
                 }
             }
         });
-        
+
         unpause.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -205,14 +247,14 @@ public class GUI extends JFrame {
                 }
             }
         });
-        
+
         next.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 musicPlayer.nextSong();
             }
         });
-        
+
         buttonPanel.setLayout(new FlowLayout());
         buttonPanel.add(previous);
         buttonPanel.add(play);
@@ -222,11 +264,11 @@ public class GUI extends JFrame {
         buttonPanel.add(next);
         this.add(buttonPanel, BorderLayout.SOUTH);
     }
-    
-    public void buildPopup() {
+
+    private void buildPopup() {
         JMenuItem addSong = new JMenuItem("Add song to Library");
         JMenuItem deleteSong = new JMenuItem("Delete currently selected song");
-        
+
         // Event handlers
         addSong.addActionListener(new ActionListener() {
             @Override
@@ -234,23 +276,23 @@ public class GUI extends JFrame {
                 handleAddSong();
             }
         });
-        
+
         deleteSong.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 handleDeleteSong();
             }
         });
-        
+
         popupMenu.add(addSong);
         popupMenu.addSeparator();
         popupMenu.add(deleteSong);
     }
-    
+
     private void setSongs() {
         // Clear out existing rows
         tableModel.setRowCount(0);
-        
+
         // Load songs from database
         List<Song> songs = musicPlayer.getAllSongs();
         for (Song song : songs) {
@@ -265,6 +307,24 @@ public class GUI extends JFrame {
         }
     }
     
+    private void handleOpenAndPlaySong() {
+        JFileChooser fileSelection = new JFileChooser();
+        fileSelection.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fileSelection.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("MP3 files", "mp3"));
+        int selection = fileSelection.showOpenDialog(null);
+        if (selection == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileSelection.getSelectedFile();
+            if (selectedFile == null || !selectedFile.exists() || !selectedFile.getName().endsWith(".mp3")) {
+                JOptionPane.showMessageDialog(null, "Selected file is not a valid MP3 file.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+            
+            // Play song
+            musicPlayer.playSongFromFile(selectedFile);
+        } else {
+            JOptionPane.showMessageDialog(null, "Failed to play the song from file.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void handleAddSong() {
         JFileChooser fileSelection = new JFileChooser();
         fileSelection.setFileSelectionMode(JFileChooser.FILES_ONLY);
@@ -276,7 +336,7 @@ public class GUI extends JFrame {
                 JOptionPane.showMessageDialog(null, "Selected file is not a valid MP3 file.", "Error", JOptionPane.ERROR_MESSAGE);
             }
             boolean status = musicPlayer.addSong(selectedFile);
-            
+
             // Check if song is successfully added to database
             if (status) {
                 // Refresh JTable
@@ -286,13 +346,13 @@ public class GUI extends JFrame {
             }
         }
     }
-    
+
     private void handleDeleteSong() {
         int selectedRow = songTable.getSelectedRow();
         if (selectedRow != -1) {
             String title = (String) tableModel.getValueAt(selectedRow, 0);
             boolean status = musicPlayer.deleteSong(title);
-            
+
             // Check if song is successfully deleted
             if (status) {
                 tableModel.removeRow(selectedRow);

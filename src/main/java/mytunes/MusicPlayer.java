@@ -10,7 +10,6 @@ import javafx.application.Platform;
 import javafx.scene.media.*;
 
 public class MusicPlayer {
-
     private DatabaseManager dbManager;
     private MediaPlayer mediaPlayer; // Controls audio playback
     private Media media; // Holds media resource
@@ -60,6 +59,8 @@ public class MusicPlayer {
     }
 
     public boolean deleteSong(String title) {
+        Song songToRemove = findSongByTitle(title);
+        songs.remove(songToRemove);
         return dbManager.deleteSong(title);
     }
 
@@ -67,6 +68,10 @@ public class MusicPlayer {
         if (selectedSong != null && selectedIndex >= 0) {
             Platform.runLater(() -> {
                 try {
+                    // Pause current media player if it's already playing
+                    if (mediaPlayer != null && mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING) {
+                        mediaPlayer.pause();
+                    }
                     media = new Media(selectedSong.getFileURL());
                     mediaPlayer = new MediaPlayer(media);
                     mediaPlayer.play();
@@ -79,12 +84,29 @@ public class MusicPlayer {
         }
     }
 
+    public void playSongFromFile(File mp3File) {
+        Platform.runLater(() -> {
+            try {
+                // Pause current media player if it's already playing
+                if (mediaPlayer != null && mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING) {
+                    mediaPlayer.pause();
+                }
+                media = new Media(mp3File.toURI().toString());
+                mediaPlayer = new MediaPlayer(media);
+                mediaPlayer.play();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
+    }
+
     public void stopPlaying() {
         if (mediaPlayer != null) {
             mediaPlayer.stop();
         }
     }
-    
+
     public boolean isPlaying() {
         return mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING;
     }
@@ -123,7 +145,7 @@ public class MusicPlayer {
         if (isPlaying()) { // Stop playing current song if needed
             stopPlaying();
         }
-        
+
         selectedIndex--;
         if (selectedIndex >= 0) { // Fetch previous song in library
             selectedSong = songs.get(selectedIndex);
