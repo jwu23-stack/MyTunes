@@ -19,9 +19,11 @@ import java.io.File;
 import javafx.application.Platform;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeModel;
 
 public class GUI extends JFrame {
-    JPanel panel, buttonPanel;
+    JPanel panel, buttonPanel, sidePanel;
     JButton play, stop, pause, unpause, next, previous;
     JMenuBar menubar;
     JTable songTable;
@@ -36,6 +38,12 @@ public class GUI extends JFrame {
         menubar = new JMenuBar();
         musicPlayer = new MusicPlayer();
         popupMenu = new JPopupMenu();
+        
+        // Initialize sidePanel
+        sidePanel = new JPanel();
+        // Set width of sidePanel to 150 (1/8 of 1200)
+        sidePanel.setPreferredSize(new Dimension(150, 600));
+        sidePanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         // Initialize table
         String[] columnNames = {"Title", "Artist", "Album", "Year", "Genre", "Comment"};
@@ -49,6 +57,11 @@ public class GUI extends JFrame {
         songTable = new JTable(tableModel);
         songTable.setFillsViewportHeight(true);
         songTableScrollPane = new JScrollPane(songTable);
+        
+        // Set sidePanel to the left of songTable
+        this.setLayout(new BorderLayout());
+        this.add(sidePanel, BorderLayout.WEST);
+        this.add(songTableScrollPane, BorderLayout.CENTER);
 
         buttonPanel = new JPanel();
         play = new JButton("Play");
@@ -80,6 +93,9 @@ public class GUI extends JFrame {
 
         // Add Popup Component
         buildPopup();
+        
+        // Add SidePanel Component
+        buildSidePanel();
 
         this.setVisible(true);
     }
@@ -256,6 +272,7 @@ public class GUI extends JFrame {
         });
 
         buttonPanel.setLayout(new FlowLayout());
+        buttonPanel.setBackground(Color.LIGHT_GRAY);
         buttonPanel.add(previous);
         buttonPanel.add(play);
         buttonPanel.add(stop);
@@ -287,6 +304,30 @@ public class GUI extends JFrame {
         popupMenu.add(addSong);
         popupMenu.addSeparator();
         popupMenu.add(deleteSong);
+    }
+    
+    private void buildSidePanel() {
+        sidePanel.setLayout(new FlowLayout(FlowLayout.LEFT));
+        
+        // Build library tree
+        DefaultMutableTreeNode libraryRoot = new DefaultMutableTreeNode("Library");
+        DefaultTreeModel libraryTreeModel = new DefaultTreeModel(libraryRoot);
+        JTree libraryTree = new JTree(libraryTreeModel);
+        libraryTree.setShowsRootHandles(false);
+        libraryTree.setEditable(false);
+        
+        // Build playlist tree
+        DefaultMutableTreeNode playlistRoot = new DefaultMutableTreeNode("Playlist");
+        populatePlaylistTree(playlistRoot);
+        DefaultTreeModel playlistTreeModel = new DefaultTreeModel(playlistRoot);
+        JTree playlistTree = new JTree(playlistTreeModel);
+        playlistTree.setShowsRootHandles(false);
+        playlistTree.setEditable(false);
+        
+        sidePanel.add(libraryTree, BorderLayout.WEST);
+        sidePanel.add(playlistTree, BorderLayout.WEST);
+        sidePanel.setBackground(Color.WHITE);
+        this.add(sidePanel, BorderLayout.WEST);
     }
 
     private void setSongs() {
@@ -361,6 +402,22 @@ public class GUI extends JFrame {
             }
         } else {
             JOptionPane.showMessageDialog(null, "Please select a song to delete");
+        }
+    }
+    
+    private void populatePlaylistTree(DefaultMutableTreeNode playlistRoot) {
+        // Sample playlists (change later)
+        String[] playlists = {"Rock", "Classical", "Jazz"};
+        
+        for (String playlist: playlists) {
+            PlaylistNode playlistNode = new PlaylistNode(playlist);
+            playlistRoot.add(playlistNode);
+        }
+    }
+    
+    class PlaylistNode extends DefaultMutableTreeNode {
+        public PlaylistNode(Object userObject) {
+            super(userObject);
         }
     }
 }
