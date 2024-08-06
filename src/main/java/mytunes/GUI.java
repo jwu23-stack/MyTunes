@@ -220,7 +220,12 @@ public class GUI extends JFrame {
         previous.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                int currentRow = songTable.getSelectedRow();
+                // Calculate the previous row index, wrap around if necessary
+                int newRow = (currentRow - 1 + songTable.getRowCount()) % songTable.getRowCount();
                 musicPlayer.previousSong();
+                songTable.setRowSelectionInterval(newRow, newRow);
+                songTable.scrollRectToVisible(songTable.getCellRect(newRow, 0, true));
             }
         });
 
@@ -267,7 +272,12 @@ public class GUI extends JFrame {
         next.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                int currentRow = songTable.getSelectedRow();
+                // Calculate the next row index, wrap around if necessary
+                int newRow = (currentRow + 1) % songTable.getRowCount();
                 musicPlayer.nextSong();
+                songTable.setRowSelectionInterval(newRow, newRow);
+                songTable.scrollRectToVisible(songTable.getCellRect(newRow, 0, true));
             }
         });
 
