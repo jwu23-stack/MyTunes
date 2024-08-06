@@ -158,4 +158,16 @@ public class MusicPlayer {
             playSong();
         }
     }
+    
+    public boolean createPlaylist(String name) {
+        return dbManager.addPlaylist(name);
+    }
+    
+    public List<Song> getPlaylistSongs(String playlistName) {
+        return dbManager.getPlaylistSongs(playlistName);
+    }
+    
+    public List<String> getPlaylists() {
+        return dbManager.getPlaylists();
+    }
 }

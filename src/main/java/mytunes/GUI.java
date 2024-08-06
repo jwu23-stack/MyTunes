@@ -19,8 +19,9 @@ import java.io.File;
 import javafx.application.Platform;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeModel;
+import javax.swing.event.TreeSelectionEvent;
+import javax.swing.event.TreeSelectionListener;
+import javax.swing.tree.*;
 
 public class GUI extends JFrame {
     JPanel panel, buttonPanel, sidePanel;
@@ -31,6 +32,8 @@ public class GUI extends JFrame {
     DefaultTableModel tableModel;
     MusicPlayer musicPlayer;
     JPopupMenu popupMenu;
+    DefaultMutableTreeNode playlistRoot, lastSelectedNode;
+    JTree playlistTree;
 
     // Initialize components
     public GUI() {
@@ -38,12 +41,13 @@ public class GUI extends JFrame {
         menubar = new JMenuBar();
         musicPlayer = new MusicPlayer();
         popupMenu = new JPopupMenu();
-        
+
         // Initialize sidePanel
         sidePanel = new JPanel();
         // Set width of sidePanel to 150 (1/8 of 1200)
         sidePanel.setPreferredSize(new Dimension(150, 600));
         sidePanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        lastSelectedNode = null;
 
         // Initialize table
         String[] columnNames = {"Title", "Artist", "Album", "Year", "Genre", "Comment"};
@@ -57,7 +61,7 @@ public class GUI extends JFrame {
         songTable = new JTable(tableModel);
         songTable.setFillsViewportHeight(true);
         songTableScrollPane = new JScrollPane(songTable);
-        
+
         // Set sidePanel to the left of songTable
         this.setLayout(new BorderLayout());
         this.add(sidePanel, BorderLayout.WEST);
@@ -93,7 +97,7 @@ public class GUI extends JFrame {
 
         // Add Popup Component
         buildPopup();
-        
+
         // Add SidePanel Component
         buildSidePanel();
 
@@ -102,19 +106,48 @@ public class GUI extends JFrame {
 
     private void buildMenu() {
         JMenu fileMenu = new JMenu("File");
+        JMenuItem createPlaylist = new JMenuItem("Create Playlist");
         JMenuItem openAndPlay = new JMenuItem("Open Song");
         JMenuItem addSong = new JMenuItem("Add Song");
         JMenuItem deleteSong = new JMenuItem("Delete Song");
         JMenuItem exit = new JMenuItem("Exit");
 
         // Event Handlers
-        openAndPlay.addActionListener(new ActionListener() {
-           @Override
-           public void actionPerformed(ActionEvent e) {
-               handleOpenAndPlaySong();
-           }
+        createPlaylist.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String playlistName = JOptionPane.showInputDialog(null, "Enter Playlist Name:", "Create Playlist", JOptionPane.PLAIN_MESSAGE);
+                if (playlistName != null && !playlistName.trim().isEmpty()) {
+                    boolean success = musicPlayer.createPlaylist(playlistName);
+                    if (success) {
+                        // Add the new playlist to the tree
+                        PlaylistNode newPlaylist = new PlaylistNode(playlistName);
+                        playlistRoot.add(newPlaylist);
+
+                        // Refresh the tree
+                        ((DefaultTreeModel) playlistTree.getModel()).reload();
+
+                        // Select the newly added playlist node
+                        TreePath newPath = new TreePath(newPlaylist.getPath());
+                        playlistTree.setSelectionPath(newPath);
+                        playlistTree.scrollPathToVisible(newPath);
+
+                        // Fetch and display the songs of new playlist in songTable
+                        displaySongsOfSelectedPlaylist(playlistName);
+                    } else {
+                        JOptionPane.showMessageDialog(null, "Failed to create playlist.", "Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            }
         });
-        
+
+        openAndPlay.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleOpenAndPlaySong();
+            }
+        });
+
         addSong.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -136,6 +169,7 @@ public class GUI extends JFrame {
             }
         });
 
+        fileMenu.add(createPlaylist);
         fileMenu.add(openAndPlay);
         fileMenu.add(addSong);
         fileMenu.add(deleteSong);
@@ -201,7 +235,7 @@ public class GUI extends JFrame {
                                 setSongs();
                             } else {
                                 JOptionPane.showMessageDialog(null, "Failed to add the song '" + file.getName() + "' to the database.", "Error", JOptionPane.ERROR_MESSAGE);
-                                
+
                             }
                         }
                     }
@@ -315,25 +349,58 @@ public class GUI extends JFrame {
         popupMenu.addSeparator();
         popupMenu.add(deleteSong);
     }
-    
+
     private void buildSidePanel() {
         sidePanel.setLayout(new FlowLayout(FlowLayout.LEFT));
-        
+
         // Build library tree
         DefaultMutableTreeNode libraryRoot = new DefaultMutableTreeNode("Library");
         DefaultTreeModel libraryTreeModel = new DefaultTreeModel(libraryRoot);
         JTree libraryTree = new JTree(libraryTreeModel);
         libraryTree.setShowsRootHandles(false);
         libraryTree.setEditable(false);
-        
+
         // Build playlist tree
-        DefaultMutableTreeNode playlistRoot = new DefaultMutableTreeNode("Playlist");
+        playlistRoot = new DefaultMutableTreeNode("Playlist");
         populatePlaylistTree(playlistRoot);
         DefaultTreeModel playlistTreeModel = new DefaultTreeModel(playlistRoot);
-        JTree playlistTree = new JTree(playlistTreeModel);
+        playlistTree = new JTree(playlistTreeModel);
         playlistTree.setShowsRootHandles(false);
         playlistTree.setEditable(false);
-        
+
+        // Event listeners
+        libraryTree.addTreeSelectionListener(new TreeSelectionListener() {
+            @Override
+            public void valueChanged(TreeSelectionEvent e) {
+                DefaultMutableTreeNode node = (DefaultMutableTreeNode) libraryTree.getLastSelectedPathComponent();
+
+//                playlistTree.clearSelection();
+                
+                // Check if the library node itself was clicked
+                if (node != null && node.getUserObject().equals("Library")) {
+                    // Display all songs
+                    setSongs();
+                }
+            }
+        });
+
+        playlistTree.addTreeSelectionListener(new TreeSelectionListener() {
+            @Override
+            public void valueChanged(TreeSelectionEvent e) {
+                DefaultMutableTreeNode node = (DefaultMutableTreeNode) playlistTree.getLastSelectedPathComponent();
+
+//                libraryTree.clearSelection();
+                
+                // Check if a playlist node is clicked
+                if (node != null && !node.getUserObject().equals("Playlist")) { // Ensure we're not clicking on the root "Playlist" node itself
+                    String playlistName = node.getUserObject().toString();
+                    
+                    // Display playlist's songs
+                    displaySongsOfSelectedPlaylist(playlistName);
+                }
+            }
+        });
+
         sidePanel.add(libraryTree, BorderLayout.WEST);
         sidePanel.add(playlistTree, BorderLayout.WEST);
         sidePanel.setBackground(Color.WHITE);
@@ -357,7 +424,7 @@ public class GUI extends JFrame {
             });
         }
     }
-    
+
     private void handleOpenAndPlaySong() {
         JFileChooser fileSelection = new JFileChooser();
         fileSelection.setFileSelectionMode(JFileChooser.FILES_ONLY);
@@ -368,7 +435,7 @@ public class GUI extends JFrame {
             if (selectedFile == null || !selectedFile.exists() || !selectedFile.getName().endsWith(".mp3")) {
                 JOptionPane.showMessageDialog(null, "Selected file is not a valid MP3 file.", "Error", JOptionPane.ERROR_MESSAGE);
             }
-            
+
             // Play song
             musicPlayer.playSongFromFile(selectedFile);
         } else {
@@ -414,18 +481,38 @@ public class GUI extends JFrame {
             JOptionPane.showMessageDialog(null, "Please select a song to delete");
         }
     }
-    
+
+    private void displaySongsOfSelectedPlaylist(String playlistName) {
+        List<Song> songs = musicPlayer.getPlaylistSongs(playlistName);
+
+        // Clear existing rows in the table model
+        tableModel.setRowCount(0);
+
+        // Add songs to table model
+        for (Song song : songs) {
+            tableModel.addRow(new Object[]{
+                song.getTitle(),
+                song.getArtist(),
+                song.getAlbum(),
+                song.getYear(),
+                song.getGenre(),
+                song.getComment()
+            });
+        }
+    }
+
     private void populatePlaylistTree(DefaultMutableTreeNode playlistRoot) {
-        // Sample playlists (change later)
-        String[] playlists = {"Rock", "Classical", "Jazz"};
-        
-        for (String playlist: playlists) {
+        // Retrieve playlist names from database
+        List<String> playlists = musicPlayer.getPlaylists();
+
+        for (String playlist : playlists) {
             PlaylistNode playlistNode = new PlaylistNode(playlist);
             playlistRoot.add(playlistNode);
         }
     }
-    
+
     class PlaylistNode extends DefaultMutableTreeNode {
+
         public PlaylistNode(Object userObject) {
             super(userObject);
         }

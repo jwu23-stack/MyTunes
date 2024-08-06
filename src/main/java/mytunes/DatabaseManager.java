@@ -78,4 +78,63 @@ public class DatabaseManager {
             return false;
         }
     }
+    
+    public List<String> getPlaylists() {
+        List<String> playlists = new ArrayList<>();
+        String query = "SELECT name FROM playlists";
+        
+        try (Connection connection = connect(); Statement statement = connection.createStatement(); ResultSet resultSet = statement.executeQuery(query)) {
+
+            while (resultSet.next()) {
+                String playlistName = resultSet.getString("name");
+                playlists.add(playlistName);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return playlists;
+    }
+    
+    public boolean addPlaylist(String name) {
+        // Prepare query to prevent SQL Injection
+        String query = "INSERT INTO playlists (name) VALUES (?)";
+        
+        try (Connection connection = connect(); PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, name);
+            
+            // Execute query
+            int rowsAffected = statement.executeUpdate();
+            return (rowsAffected > 0);
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    
+    public List<Song> getPlaylistSongs(String playlistName) {
+        List<Song> songs = new ArrayList<>();
+        // Prepare query to prevent SQL Injection
+        String query = "SELECT s.* FROM songs AS s JOIN playlists_songs AS ps ON s.id = ps.song_id JOIN playlists AS p ON ps.playlist_id = p.id WHERE p.name = ?";
+        
+        try (Connection connection = connect(); PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, playlistName);
+            
+            // Execute query
+            ResultSet resultSet = statement.executeQuery();
+            
+            while (resultSet.next()) {
+                String title = resultSet.getString("title");
+                String artist = resultSet.getString("artist");
+                String album = resultSet.getString("album");
+                String year = resultSet.getString("year");
+                String genre = resultSet.getString("genre");
+                String comment = resultSet.getString("comment");
+                
+                songs.add(new Song(title, artist, album, year, genre, comment));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return songs;
+    }
 }
