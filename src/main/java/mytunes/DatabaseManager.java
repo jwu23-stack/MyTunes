@@ -7,15 +7,16 @@ package mytunes;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import io.github.cdimascio.dotenv.*;
 
 public class DatabaseManager {
-    // AWS Credentials to AWS SQL Database 
-    private static final String URL = "jdbc:mysql://admin.cx2c440uu0lx.us-east-2.rds.amazonaws.com:3306/mytunes";
-    private static final String USER = "admin";
-    private static final String PASSWORD = "12345678";
 
     public Connection connect() throws SQLException {
-        return DriverManager.getConnection(URL, USER, PASSWORD);
+        Dotenv dotenv = Dotenv.load();
+        String dbUrl = dotenv.get("DB_URL");
+        String dbUser = dotenv.get("DB_USER");
+        String dbPassword = dotenv.get("DB_PASSWORD");
+        return DriverManager.getConnection(dbUrl, dbUser, dbPassword);
     }
 
     // Return the list of songs from SQL Database
