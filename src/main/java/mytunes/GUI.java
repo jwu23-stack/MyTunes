@@ -24,6 +24,7 @@ import javax.swing.event.TreeSelectionListener;
 import javax.swing.tree.*;
 
 public class GUI extends JFrame {
+
     JPanel panel, buttonPanel, sidePanel;
     JButton play, stop, pause, unpause, next, previous;
     JMenuBar menubar;
@@ -31,8 +32,8 @@ public class GUI extends JFrame {
     JScrollPane songTableScrollPane;
     DefaultTableModel tableModel;
     MusicPlayer musicPlayer;
-    JPopupMenu popupMenu;
-    DefaultMutableTreeNode playlistRoot, lastSelectedNode;
+    JPopupMenu popupMenu, playlistPopupMenu;
+    DefaultMutableTreeNode playlistRoot;
     JTree playlistTree;
 
     // Initialize components
@@ -41,13 +42,13 @@ public class GUI extends JFrame {
         menubar = new JMenuBar();
         musicPlayer = new MusicPlayer();
         popupMenu = new JPopupMenu();
+        playlistPopupMenu = new JPopupMenu();
 
         // Initialize sidePanel
         sidePanel = new JPanel();
         // Set width of sidePanel to 150 (1/8 of 1200)
         sidePanel.setPreferredSize(new Dimension(150, 600));
         sidePanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        lastSelectedNode = null;
 
         // Initialize table
         String[] columnNames = {"Title", "Artist", "Album", "Year", "Genre", "Comment"};
@@ -369,14 +370,12 @@ public class GUI extends JFrame {
         playlistTree.setEditable(false);
 
         // Event listeners
-        libraryTree.addTreeSelectionListener(new TreeSelectionListener() {
+        libraryTree.addMouseListener(new MouseAdapter() {
             @Override
-            public void valueChanged(TreeSelectionEvent e) {
+            public void mouseClicked(MouseEvent e) {
                 DefaultMutableTreeNode node = (DefaultMutableTreeNode) libraryTree.getLastSelectedPathComponent();
 
-//                playlistTree.clearSelection();
-                
-                // Check if the library node itself was clicked
+                playlistTree.clearSelection();
                 if (node != null && node.getUserObject().equals("Library")) {
                     // Display all songs
                     setSongs();
@@ -384,19 +383,31 @@ public class GUI extends JFrame {
             }
         });
 
-        playlistTree.addTreeSelectionListener(new TreeSelectionListener() {
+        playlistTree.addMouseListener(new MouseAdapter() {
             @Override
-            public void valueChanged(TreeSelectionEvent e) {
+            public void mouseClicked(MouseEvent e) {
                 DefaultMutableTreeNode node = (DefaultMutableTreeNode) playlistTree.getLastSelectedPathComponent();
 
-//                libraryTree.clearSelection();
-                
-                // Check if a playlist node is clicked
+                libraryTree.clearSelection();
                 if (node != null && !node.getUserObject().equals("Playlist")) { // Ensure we're not clicking on the root "Playlist" node itself
                     String playlistName = node.getUserObject().toString();
-                    
+
                     // Display playlist's songs
                     displaySongsOfSelectedPlaylist(playlistName);
+                }
+            }
+        });
+
+        playlistTree.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    DefaultMutableTreeNode node = (DefaultMutableTreeNode) playlistTree.getLastSelectedPathComponent();
+                    if (node != null && !node.getUserObject().equals("Playlist")) {
+                        String playlistName = node.getUserObject().toString();
+                        displayPlaylistPopup(e, playlistName);
+                    }
+
                 }
             }
         });
@@ -501,6 +512,47 @@ public class GUI extends JFrame {
         }
     }
 
+    private void displayPlaylistPopup(MouseEvent e, String playlistName) {
+        // Clear existing menu items to avoid duplicates
+        playlistPopupMenu.removeAll();
+
+        JMenuItem openInNewWindowItem = new JMenuItem("Open in New Window");
+
+        // Event listener
+        openInNewWindowItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (playlistName != null) {
+                    openPlaylistInNewWindow(playlistName);
+                } else {
+                    System.err.println("Playlist not found.");
+                }
+            }
+        });
+
+        playlistPopupMenu.add(openInNewWindowItem);
+        playlistPopupMenu.show(e.getComponent(), e.getX(), e.getY());
+    }
+
+    private void openPlaylistInNewWindow(String playlistName) {
+        JFrame playlistWindow = new JFrame(playlistName);
+        playlistWindow.setSize(1200, 700);
+        playlistWindow.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+
+        // Create a JPanel for the new window's content
+        JPanel panelForPlaylist = new JPanel();
+        playlistWindow.add(panelForPlaylist);
+        
+        // Initialize components for the new window
+        JPanel buttonPanelForPlaylist = new JPanel();
+        JTable songTableForPlaylist = new JTable();
+        JScrollPane songTableScrollPaneForPlaylist = new JScrollPane(songTableForPlaylist);
+        DefaultTableModel tableModelForPlaylist = new DefaultTableModel(new String[]{"Title", "Artist", "Album", "Year", "Genre", "Comment"}, 0);
+
+        
+//        playlistWindow.setVisible(true);
+    }
+
     private void populatePlaylistTree(DefaultMutableTreeNode playlistRoot) {
         // Retrieve playlist names from database
         List<String> playlists = musicPlayer.getPlaylists();
@@ -509,6 +561,14 @@ public class GUI extends JFrame {
             PlaylistNode playlistNode = new PlaylistNode(playlist);
             playlistRoot.add(playlistNode);
         }
+    }
+
+    private void refillMainLibraryWithSongs() {
+        // Clear the main library's song table
+        tableModel.setRowCount(0);
+
+        // Refill the main library with the entire song library
+        setSongs();
     }
 
     class PlaylistNode extends DefaultMutableTreeNode {
