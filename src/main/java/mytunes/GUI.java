@@ -66,7 +66,7 @@ public class GUI extends JFrame {
 
         this.setTitle("MyTunes");
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        this.setSize(1200, 700);
+        this.setSize(1000, 400);
         this.add(panel);
 
         // Add Menu Component
@@ -234,22 +234,14 @@ public class GUI extends JFrame {
         pause.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                if (musicPlayer.getSelectedSong() != null) {
-                    musicPlayer.pausePlaying();
-                } else {
-                    JOptionPane.showMessageDialog(null, "No song selected.", "Error", JOptionPane.ERROR_MESSAGE);
-                }
+                musicPlayer.pausePlaying();   
             }
         });
 
         unpause.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                if (musicPlayer.getSelectedSong() != null) {
-                    musicPlayer.resumePlaying();
-                } else {
-                    JOptionPane.showMessageDialog(null, "No song selected.", "Error", JOptionPane.ERROR_MESSAGE);
-                }
+                musicPlayer.resumePlaying();
             }
         });
 
