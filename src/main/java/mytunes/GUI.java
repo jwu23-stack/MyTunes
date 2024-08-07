@@ -25,12 +25,12 @@ import javax.swing.tree.*;
 
 public class GUI extends JFrame {
 
-    JPanel panel, buttonPanel, sidePanel;
+    JPanel mainPanel, mainButtonPanel, sidePanel;
     JButton play, stop, pause, unpause, next, previous;
-    JMenuBar menubar;
-    JTable songTable;
-    JScrollPane songTableScrollPane;
-    DefaultTableModel tableModel;
+    JMenuBar mainMenubar;
+    JTable mainSongTable;
+    JScrollPane mainSongTableScrollPane;
+    DefaultTableModel mainTableModel;
     MusicPlayer musicPlayer;
     JPopupMenu popupMenu, playlistPopupMenu;
     DefaultMutableTreeNode playlistRoot;
@@ -38,8 +38,8 @@ public class GUI extends JFrame {
 
     // Initialize components
     public GUI() {
-        panel = new JPanel();
-        menubar = new JMenuBar();
+        mainPanel = new JPanel();
+        mainMenubar = new JMenuBar();
         musicPlayer = new MusicPlayer();
         popupMenu = new JPopupMenu();
         playlistPopupMenu = new JPopupMenu();
@@ -52,23 +52,23 @@ public class GUI extends JFrame {
 
         // Initialize table
         String[] columnNames = {"Title", "Artist", "Album", "Year", "Genre", "Comment"};
-        tableModel = new DefaultTableModel(columnNames, 0) {
+        mainTableModel = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 // Allow editing only for the Comment column
                 return column == 5;
             }
         };
-        songTable = new JTable(tableModel);
-        songTable.setFillsViewportHeight(true);
-        songTableScrollPane = new JScrollPane(songTable);
+        mainSongTable = new JTable(mainTableModel);
+        mainSongTable.setFillsViewportHeight(true);
+        mainSongTableScrollPane = new JScrollPane(mainSongTable);
 
         // Set sidePanel to the left of songTable
         this.setLayout(new BorderLayout());
         this.add(sidePanel, BorderLayout.WEST);
-        this.add(songTableScrollPane, BorderLayout.CENTER);
+        this.add(mainSongTableScrollPane, BorderLayout.CENTER);
 
-        buttonPanel = new JPanel();
+        mainButtonPanel = new JPanel();
         play = new JButton("Play");
         stop = new JButton("Stop");
         pause = new JButton("Pause");
@@ -85,27 +85,27 @@ public class GUI extends JFrame {
         this.setTitle("MyTunes");
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.setSize(1200, 700);
-        this.add(panel);
+        this.add(mainPanel);
 
-        // Add Menu Component
-        buildMenu();
+        // Add Menu Component for main window
+        buildMenu(mainMenubar, this);
 
-        // Add SongTable Component
-        buildSongLibrary();
+        // Add SongTable Component for main window
+        buildSongLibrary(mainSongTable, mainSongTableScrollPane, this, musicPlayer);
 
-        // Add Button Panel
-        buildButtonPanel();
+        // Add Button Panel for main window
+        buildButtonPanel(mainSongTable, mainButtonPanel, this, play, stop, pause, unpause, next, previous, musicPlayer);
 
-        // Add Popup Component
+        // Add Popup Component for main window
         buildPopup();
 
-        // Add SidePanel Component
+        // Add SidePanel Component for main window
         buildSidePanel();
 
         this.setVisible(true);
     }
 
-    private void buildMenu() {
+    private void buildMenu(JMenuBar menubar, JFrame frame) {
         JMenu fileMenu = new JMenu("File");
         JMenuItem createPlaylist = new JMenuItem("Create Playlist");
         JMenuItem openAndPlay = new JMenuItem("Open Song");
@@ -177,10 +177,10 @@ public class GUI extends JFrame {
         fileMenu.addSeparator();
         fileMenu.add(exit);
         menubar.add(fileMenu);
-        this.setJMenuBar(menubar);
+        frame.setJMenuBar(menubar);
     }
 
-    private void buildSongLibrary() {
+    private void buildSongLibrary(JTable songTable, JScrollPane songTableScrollPane, JFrame frame, MusicPlayer musicPlayer) {
         // Adjust header render
         DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
         headerRenderer.setHorizontalAlignment(JLabel.CENTER);
@@ -208,7 +208,7 @@ public class GUI extends JFrame {
                 if (!e.getValueIsAdjusting()) {
                     int selectedRow = songTable.getSelectedRow();
                     if (selectedRow != -1) {
-                        String title = (String) tableModel.getValueAt(selectedRow, 0);
+                        String title = (String) mainTableModel.getValueAt(selectedRow, 0);
                         Song selectedSong = musicPlayer.findSongByTitle(title);
                         if (selectedSong != null) {
                             musicPlayer.setSelectedSong(selectedSong, selectedRow);
@@ -247,10 +247,10 @@ public class GUI extends JFrame {
         });
 
         songTable.setGridColor(Color.BLACK);
-        this.add(songTableScrollPane, BorderLayout.CENTER);
+        frame.add(songTableScrollPane, BorderLayout.CENTER);
     }
 
-    private void buildButtonPanel() {
+    private void buildButtonPanel(JTable songTable, JPanel panel, JFrame frame, JButton play, JButton stop, JButton pause, JButton unpause, JButton next, JButton previous, MusicPlayer musicPlayer) {
         // Event handlers
         previous.addActionListener(new ActionListener() {
             @Override
@@ -316,15 +316,15 @@ public class GUI extends JFrame {
             }
         });
 
-        buttonPanel.setLayout(new FlowLayout());
-        buttonPanel.setBackground(Color.LIGHT_GRAY);
-        buttonPanel.add(previous);
-        buttonPanel.add(play);
-        buttonPanel.add(stop);
-        buttonPanel.add(pause);
-        buttonPanel.add(unpause);
-        buttonPanel.add(next);
-        this.add(buttonPanel, BorderLayout.SOUTH);
+        panel.setLayout(new FlowLayout());
+        panel.setBackground(Color.LIGHT_GRAY);
+        panel.add(previous);
+        panel.add(play);
+        panel.add(stop);
+        panel.add(pause);
+        panel.add(unpause);
+        panel.add(next);
+        frame.add(panel, BorderLayout.SOUTH);
     }
 
     private void buildPopup() {
@@ -420,12 +420,12 @@ public class GUI extends JFrame {
 
     private void setSongs() {
         // Clear out existing rows
-        tableModel.setRowCount(0);
+        mainTableModel.setRowCount(0);
 
         // Load songs from database
         List<Song> songs = musicPlayer.getAllSongs();
         for (Song song : songs) {
-            tableModel.addRow(new Object[]{
+            mainTableModel.addRow(new Object[]{
                 song.getTitle(),
                 song.getArtist(),
                 song.getAlbum(),
@@ -477,14 +477,14 @@ public class GUI extends JFrame {
     }
 
     private void handleDeleteSong() {
-        int selectedRow = songTable.getSelectedRow();
+        int selectedRow = mainSongTable.getSelectedRow();
         if (selectedRow != -1) {
-            String title = (String) tableModel.getValueAt(selectedRow, 0);
+            String title = (String) mainTableModel.getValueAt(selectedRow, 0);
             boolean status = musicPlayer.deleteSong(title);
 
             // Check if song is successfully deleted
             if (status) {
-                tableModel.removeRow(selectedRow);
+                mainTableModel.removeRow(selectedRow);
             } else {
                 JOptionPane.showMessageDialog(null, "Failed to delete the song in database.", "Error", JOptionPane.ERROR_MESSAGE);
             }
@@ -497,11 +497,11 @@ public class GUI extends JFrame {
         List<Song> songs = musicPlayer.getPlaylistSongs(playlistName);
 
         // Clear existing rows in the table model
-        tableModel.setRowCount(0);
+        mainTableModel.setRowCount(0);
 
         // Add songs to table model
         for (Song song : songs) {
-            tableModel.addRow(new Object[]{
+            mainTableModel.addRow(new Object[]{
                 song.getTitle(),
                 song.getArtist(),
                 song.getAlbum(),
@@ -545,12 +545,26 @@ public class GUI extends JFrame {
         
         // Initialize components for the new window
         JPanel buttonPanelForPlaylist = new JPanel();
-        JTable songTableForPlaylist = new JTable();
-        JScrollPane songTableScrollPaneForPlaylist = new JScrollPane(songTableForPlaylist);
         DefaultTableModel tableModelForPlaylist = new DefaultTableModel(new String[]{"Title", "Artist", "Album", "Year", "Genre", "Comment"}, 0);
-
+        JTable songTableForPlaylist = new JTable(tableModelForPlaylist);
+        songTableForPlaylist.setFillsViewportHeight(true);
+        JScrollPane songTableScrollPaneForPlaylist = new JScrollPane(songTableForPlaylist);
+        JMenuBar menuBarForPlaylist = new JMenuBar();
+        JButton playForPlaylist = new JButton("Play");
+        JButton stopForPlaylist = new JButton("Stop");
+        JButton pauseForPlaylist = new JButton("Pause");
+        JButton unpauseForPlaylist = new JButton("Unpause");
+        JButton nextForPlaylist = new JButton("Next");
+        JButton previousForPlaylist = new JButton("Previous");
+        MusicPlayer playlistPlayer = new MusicPlayer();
         
-//        playlistWindow.setVisible(true);
+        // Add components to the panel for the playlist window
+        panelForPlaylist.setLayout(new BorderLayout());
+        buildMenu(menuBarForPlaylist, playlistWindow);
+        buildSongLibrary(songTableForPlaylist, songTableScrollPaneForPlaylist, playlistWindow, playlistPlayer);
+        buildButtonPanel(songTableForPlaylist, buttonPanelForPlaylist, playlistWindow, playForPlaylist, stopForPlaylist, pauseForPlaylist, unpauseForPlaylist, nextForPlaylist, previousForPlaylist, playlistPlayer);
+        
+        playlistWindow.setVisible(true);
     }
 
     private void populatePlaylistTree(DefaultMutableTreeNode playlistRoot) {
@@ -561,14 +575,6 @@ public class GUI extends JFrame {
             PlaylistNode playlistNode = new PlaylistNode(playlist);
             playlistRoot.add(playlistNode);
         }
-    }
-
-    private void refillMainLibraryWithSongs() {
-        // Clear the main library's song table
-        tableModel.setRowCount(0);
-
-        // Refill the main library with the entire song library
-        setSongs();
     }
 
     class PlaylistNode extends DefaultMutableTreeNode {
