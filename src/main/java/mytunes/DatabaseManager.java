@@ -137,4 +137,65 @@ public class DatabaseManager {
         }
         return songs;
     }
+    
+    public boolean addToPlaylist(String songTitle, String playlistName) {
+        // Find song and playlist ID
+        int songId = findSongIdByName(songTitle);
+        int playlistId = findPlaylistIdByName(playlistName);
+        
+        if (songId <= 0 || playlistId <= 0) {
+            return false;
+        }
+        
+        // Prepare query to prevent SQL Injection
+        String query = "INSERT INTO playlists_songs (playlist_id, song_id) VALUES (?, ?)";
+        
+        try (Connection connection = connect(); PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setInt(1, playlistId);
+            statement.setInt(2, songId);
+            
+            // Execute query
+            int rowsAffected = statement.executeUpdate();
+            return (rowsAffected > 0);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+   
+    private int findPlaylistIdByName(String playlistName) {
+        // Prepare query to prevent SQL Injection
+        String query = "SELECT id FROM playlists WHERE name = ?";
+        
+        try (Connection connection = connect(); PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, playlistName);
+            
+            // Execute query
+            ResultSet resultSet = statement.executeQuery();
+            if (resultSet.next()) {
+                return resultSet.getInt("id");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return -1; // playlist not found
+    }
+    
+    private int findSongIdByName(String songTitle) {
+        // Prepare query to prevent SQL Injection
+        String query = "SELECT id FROM songs WHERE title = ?";
+        
+        try (Connection connection = connect(); PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, songTitle);
+
+            // Execute query
+            ResultSet resultSet = statement.executeQuery();
+            if (resultSet.next()) {
+                return resultSet.getInt("id");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return -1; // song not found
+    }
 }

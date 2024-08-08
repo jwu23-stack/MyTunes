@@ -19,12 +19,9 @@ import java.io.File;
 import javafx.application.Platform;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
-import javax.swing.event.TreeSelectionEvent;
-import javax.swing.event.TreeSelectionListener;
 import javax.swing.tree.*;
 
 public class GUI extends JFrame {
-
     JPanel mainPanel, mainButtonPanel, sidePanel;
     JButton play, stop, pause, unpause, next, previous;
     JMenuBar mainMenubar;
@@ -35,6 +32,7 @@ public class GUI extends JFrame {
     JPopupMenu popupMenu, playlistPopupMenu;
     DefaultMutableTreeNode playlistRoot;
     JTree playlistTree;
+    String playlistName;
 
     // Initialize components
     public GUI() {
@@ -43,6 +41,7 @@ public class GUI extends JFrame {
         musicPlayer = new MusicPlayer();
         popupMenu = new JPopupMenu();
         playlistPopupMenu = new JPopupMenu();
+        playlistName = "";
 
         // Initialize sidePanel
         sidePanel = new JPanel();
@@ -88,10 +87,10 @@ public class GUI extends JFrame {
         this.add(mainPanel);
 
         // Add Menu Component for main window
-        buildMenu(mainMenubar, this, mainTableModel, mainSongTable, musicPlayer, "");
+        buildMenu(mainMenubar, this, mainTableModel, mainSongTable, musicPlayer, playlistName);
 
         // Add SongTable Component for main window
-        buildSongLibrary(mainSongTable, mainSongTableScrollPane, this, mainTableModel, musicPlayer, "");
+        buildSongLibrary(mainSongTable, mainSongTableScrollPane, this, mainTableModel, musicPlayer, playlistName);
 
         // Add Button Panel for main window
         buildButtonPanel(mainSongTable, mainButtonPanel, this, play, stop, pause, unpause, next, previous, musicPlayer);
@@ -208,7 +207,7 @@ public class GUI extends JFrame {
                 if (!e.getValueIsAdjusting()) {
                     int selectedRow = songTable.getSelectedRow();
                     if (selectedRow != -1) {
-                        String title = (String) mainTableModel.getValueAt(selectedRow, 0);
+                        String title = (String) tableModel.getValueAt(selectedRow, 0);
                         Song selectedSong = musicPlayer.findSongByTitle(title);
                         if (selectedSong != null) {
                             musicPlayer.setSelectedSong(selectedSong, selectedRow);
@@ -219,33 +218,8 @@ public class GUI extends JFrame {
         });
 
         // Setup DropTarget for songTable (drag and drop)
-        DropTarget dropTarget = new DropTarget(songTable, new DropTargetAdapter() {
-            @Override
-            public void drop(DropTargetDropEvent e) {
-                try {
-                    e.acceptDrop(DnDConstants.ACTION_COPY);
-                    Transferable transferable = e.getTransferable();
-                    List<File> droppedFiles = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
-
-                    // Add mp3 files to database and refresh table
-                    for (File file : droppedFiles) {
-                        if (file.isFile() && file.getName().toLowerCase().endsWith(".mp3")) {
-                            boolean status = musicPlayer.addSong(file);
-                            if (status) {
-                                // Refresh JTable
-                                setSongs(tableModel, musicPlayer, playlistName);
-                            } else {
-                                JOptionPane.showMessageDialog(null, "Failed to add the song '" + file.getName() + "' to the database.", "Error", JOptionPane.ERROR_MESSAGE);
-
-                            }
-                        }
-                    }
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-            }
-        });
-
+        setUpDropTarget(songTable, tableModel, musicPlayer, playlistName);
+        
         songTable.setGridColor(Color.BLACK);
         frame.add(songTableScrollPane, BorderLayout.CENTER);
     }
@@ -321,12 +295,41 @@ public class GUI extends JFrame {
 
     private void buildPopup(JTable songTable, DefaultTableModel tableModel, MusicPlayer musicPlayer, String playlistName) {
         JMenuItem addSong = new JMenuItem("Add song to Library");
+        JMenu addToPlaylistMenu = new JMenu("Add to Playlist");
         JMenuItem deleteSong = new JMenuItem("Delete currently selected song");
+
+        List<String> playlists = musicPlayer.getPlaylists();
+
+        // Populate the "Add to Playlist" submenu with playlist names
+        for (String playlist : playlists) {
+            JMenuItem playlistItem = new JMenuItem(playlist);
+            playlistItem.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    int selectedRowIndex = songTable.getSelectedRow();
+                    if (selectedRowIndex >= 0) {
+                        String songTitle = (String) songTable.getValueAt(selectedRowIndex, 0);
+
+                        boolean status = musicPlayer.addToPlaylist(songTitle, playlist);
+                        if (status) {
+                            JOptionPane.showMessageDialog(null, "Song '" + songTitle + "' has been successfully added to the playlist " + playlist, "Success", JOptionPane.INFORMATION_MESSAGE);
+                        } else {
+                            JOptionPane.showMessageDialog(null, "Failed to add song '" + songTitle + "' to the playlist.", "Error", JOptionPane.ERROR_MESSAGE);
+                        }
+
+                    } else {
+                        JOptionPane.showMessageDialog(null, "Please select a song to add to the playlist.", "Selection Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            });
+            addToPlaylistMenu.add(playlistItem);
+        }
 
         // Event handlers
         addSong.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                // Add frame parameter
                 handleAddSong(tableModel, musicPlayer, playlistName);
             }
         });
@@ -334,11 +337,13 @@ public class GUI extends JFrame {
         deleteSong.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                // Add frame parameter
                 handleDeleteSong(songTable, tableModel, musicPlayer);
             }
         });
 
         popupMenu.add(addSong);
+        popupMenu.add(addToPlaylistMenu);
         popupMenu.addSeparator();
         popupMenu.add(deleteSong);
     }
@@ -370,7 +375,11 @@ public class GUI extends JFrame {
                 playlistTree.clearSelection();
                 if (node != null && node.getUserObject().equals("Library")) {
                     // Display all songs
-                    setSongs(mainTableModel, musicPlayer, "");
+                    playlistName = "";
+                    // Reset the DropTarget for songTable (drag and drop) 
+                    setUpDropTarget(mainSongTable, mainTableModel, musicPlayer, playlistName);
+                    
+                    setSongs(mainTableModel, musicPlayer, playlistName);
                 }
             }
         });
@@ -382,7 +391,11 @@ public class GUI extends JFrame {
 
                 libraryTree.clearSelection();
                 if (node != null && !node.getUserObject().equals("Playlist")) { // Ensure we're not clicking on the root "Playlist" node itself
-                    String playlistName = node.getUserObject().toString();
+                    playlistName = node.getUserObject().toString();
+                    
+                    // Reset the DropTarget for songTable (drag and drop) 
+                    setUpDropTarget(mainSongTable, mainTableModel, musicPlayer, playlistName);
+                    
                     // Display playlist's songs
                     setSongs(mainTableModel, musicPlayer, playlistName);
                 }
@@ -414,7 +427,7 @@ public class GUI extends JFrame {
         tableModel.setRowCount(0);
 
         // Load songs from database
-        List<Song> songs; 
+        List<Song> songs;
         if (!playlistName.isEmpty()) {
             songs = musicPlayer.getPlaylistSongs(playlistName);
         } else {
@@ -489,25 +502,6 @@ public class GUI extends JFrame {
         }
     }
 
-//    private void displaySongsOfSelectedPlaylist(String playlistName) {
-//        List<Song> songs = musicPlayer.getPlaylistSongs(playlistName);
-//
-//        // Clear existing rows in the table model
-//        mainTableModel.setRowCount(0);
-//
-//        // Add songs to table model
-//        for (Song song : songs) {
-//            mainTableModel.addRow(new Object[]{
-//                song.getTitle(),
-//                song.getArtist(),
-//                song.getAlbum(),
-//                song.getYear(),
-//                song.getGenre(),
-//                song.getComment()
-//            });
-//        }
-//    }
-
     private void displayPlaylistPopup(MouseEvent e, String playlistName) {
         // Clear existing menu items to avoid duplicates
         playlistPopupMenu.removeAll();
@@ -538,7 +532,7 @@ public class GUI extends JFrame {
         // Create a JPanel for the new window's content
         JPanel panelForPlaylist = new JPanel();
         playlistWindow.add(panelForPlaylist);
-        
+
         // Initialize components for the new window
         JPanel buttonPanelForPlaylist = new JPanel();
         DefaultTableModel tableModelForPlaylist = new DefaultTableModel(new String[]{"Title", "Artist", "Album", "Year", "Genre", "Comment"}, 0);
@@ -553,15 +547,18 @@ public class GUI extends JFrame {
         JButton nextForPlaylist = new JButton("Next");
         JButton previousForPlaylist = new JButton("Previous");
         MusicPlayer playlistPlayer = new MusicPlayer();
-        
+
         // Add components to the panel for the playlist window
         panelForPlaylist.setLayout(new BorderLayout());
         buildMenu(menuBarForPlaylist, playlistWindow, tableModelForPlaylist, songTableForPlaylist, playlistPlayer, playlistName);
         buildSongLibrary(songTableForPlaylist, songTableScrollPaneForPlaylist, playlistWindow, tableModelForPlaylist, playlistPlayer, playlistName);
         buildButtonPanel(songTableForPlaylist, buttonPanelForPlaylist, playlistWindow, playForPlaylist, stopForPlaylist, pauseForPlaylist, unpauseForPlaylist, nextForPlaylist, previousForPlaylist, playlistPlayer);
-        
+
         playlistWindow.setVisible(true);
         
+        // Setup DropTarget for songTable (drag and drop)
+        setUpDropTarget(songTableForPlaylist, tableModelForPlaylist, playlistPlayer, playlistName);
+
         // Refresh main library songs
         setSongs(mainTableModel, musicPlayer, "");
     }
@@ -574,6 +571,53 @@ public class GUI extends JFrame {
             PlaylistNode playlistNode = new PlaylistNode(playlist);
             playlistRoot.add(playlistNode);
         }
+    }
+
+    private void setUpDropTarget(JComponent component, DefaultTableModel tableModel, MusicPlayer musicPlayer, String playlistName) {
+        new DropTarget(component, new DropTargetAdapter() {
+            @Override
+            public void drop(DropTargetDropEvent e) {
+                try {
+                    e.acceptDrop(DnDConstants.ACTION_COPY);
+                    Transferable transferable = e.getTransferable();
+                    List<File> droppedFiles = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
+                    List<Song> songs = musicPlayer.getAllSongs();
+                    
+                    // Add mp3 files to database and refresh table
+                    for (File file : droppedFiles) {
+                        if (file.isFile() && file.getName().toLowerCase().endsWith(".mp3")) {
+                            Song newSong = Song.extractMetaData(file);
+                            
+                            // Check if song exists in library
+                            boolean songExists = songs.stream().anyMatch(song -> newSong.getTitle().equals(song.getTitle()));
+
+                            // Add song to library if it doesn't exist
+                            if (!songExists) {
+                                boolean addedToLibrary = musicPlayer.addSong(file);
+                                if (addedToLibrary) {
+                                    setSongs(mainTableModel, musicPlayer, "");  // Refresh main library table
+                                } else {
+                                    JOptionPane.showMessageDialog(null, "Failed to add the song '" + file.getName() + "' to the library.", "Error", JOptionPane.ERROR_MESSAGE);
+                                    continue;
+                                }
+                            }
+
+                            // If a playlist name is provided, add the song to the playlist
+                            if (!playlistName.isEmpty()) {
+                                boolean addedToPlaylist = musicPlayer.addToPlaylist(newSong.getTitle(), playlistName);
+                                if (!addedToPlaylist) {
+                                    JOptionPane.showMessageDialog(null, "Failed to add the song '" + file.getName() + "' to the playlist.", "Error", JOptionPane.ERROR_MESSAGE);
+                                } else {
+                                    setSongs(tableModel, musicPlayer, playlistName);  // Refresh playlist table
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
     }
 
     class PlaylistNode extends DefaultMutableTreeNode {

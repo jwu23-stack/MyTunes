@@ -164,10 +164,15 @@ public class MusicPlayer {
     }
     
     public List<Song> getPlaylistSongs(String playlistName) {
-        return dbManager.getPlaylistSongs(playlistName);
+        songs = dbManager.getPlaylistSongs(playlistName);
+        return songs;
     }
     
     public List<String> getPlaylists() {
         return dbManager.getPlaylists();
+    }
+    
+    public boolean addToPlaylist(String songTitle, String playlistName) {
+        return dbManager.addToPlaylist(songTitle, playlistName);
     }
 }
