@@ -158,28 +158,35 @@ public class MusicPlayer {
             playSong();
         }
     }
-    
+
+    public void setVolume(int volume) {
+        if (mediaPlayer != null) {
+            double volumeLevel = volume / 100.0;
+            mediaPlayer.setVolume(volumeLevel);
+        }
+    }
+
     public boolean createPlaylist(String name) {
         return dbManager.addPlaylist(name);
     }
-    
+
     public List<Song> getPlaylistSongs(String playlistName) {
         songs = dbManager.getPlaylistSongs(playlistName);
         return songs;
     }
-    
+
     public List<String> getPlaylists() {
         return dbManager.getPlaylists();
     }
-    
+
     public boolean addToPlaylist(String songTitle, String playlistName) {
         return dbManager.addToPlaylist(songTitle, playlistName);
     }
-    
+
     public boolean deletePlaylist(int playlistId) {
         return dbManager.deletePlaylistById(playlistId);
     }
-    
+
     public int findPlaylist(String playlistName) {
         return dbManager.findPlaylistIdByName(playlistName);
     }

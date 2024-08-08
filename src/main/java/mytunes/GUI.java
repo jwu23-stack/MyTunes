@@ -22,6 +22,8 @@ import java.net.URISyntaxException;
 import java.util.Enumeration;
 import javafx.application.Platform;
 import static javax.swing.TransferHandler.COPY_OR_MOVE;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.tree.*;
@@ -30,6 +32,7 @@ public class GUI extends JFrame {
 
     JPanel mainPanel, mainButtonPanel, sidePanel;
     JButton play, stop, pause, unpause, next, previous;
+    JSlider volumeSlider;
     JMenuBar mainMenubar;
     JTable mainSongTable;
     JScrollPane mainSongTableScrollPane;
@@ -81,6 +84,7 @@ public class GUI extends JFrame {
         unpause = new JButton("Unpause");
         next = new JButton("Next");
         previous = new JButton("Previous");
+        volumeSlider = new JSlider(0, 100, 20);
     }
 
     public void go() {
@@ -100,7 +104,7 @@ public class GUI extends JFrame {
         buildSongLibrary(mainSongTable, mainSongTableScrollPane, this, mainTableModel, musicPlayer, playlistName);
 
         // Add Button Panel for main window
-        buildButtonPanel(mainSongTable, mainButtonPanel, this, play, stop, pause, unpause, next, previous, musicPlayer);
+        buildButtonPanel(mainSongTable, mainButtonPanel, this, play, stop, pause, unpause, next, previous, musicPlayer, volumeSlider);
 
         // Add Popup Component for main window
         buildPopup(mainSongTable, mainTableModel, musicPlayer, "");
@@ -231,7 +235,7 @@ public class GUI extends JFrame {
         frame.add(songTableScrollPane, BorderLayout.CENTER);
     }
 
-    private void buildButtonPanel(JTable songTable, JPanel panel, JFrame frame, JButton play, JButton stop, JButton pause, JButton unpause, JButton next, JButton previous, MusicPlayer musicPlayer) {
+    private void buildButtonPanel(JTable songTable, JPanel panel, JFrame frame, JButton play, JButton stop, JButton pause, JButton unpause, JButton next, JButton previous, MusicPlayer musicPlayer, JSlider volumeSlider) {
         // Event handlers
         previous.addActionListener(new ActionListener() {
             @Override
@@ -289,14 +293,27 @@ public class GUI extends JFrame {
             }
         });
 
+        volumeSlider.addChangeListener(new ChangeListener() {
+            @Override
+            public void stateChanged(ChangeEvent e) {
+                int volume = volumeSlider.getValue();
+                musicPlayer.setVolume(volume);
+            }
+        });
+
         panel.setLayout(new FlowLayout());
         panel.setBackground(Color.LIGHT_GRAY);
+
+        volumeSlider.setMajorTickSpacing(10);
+        volumeSlider.setMinorTickSpacing(1);
         panel.add(previous);
         panel.add(play);
         panel.add(stop);
         panel.add(pause);
         panel.add(unpause);
         panel.add(next);
+        panel.add(new JLabel("Volume:"));
+        panel.add(volumeSlider);
         frame.add(panel, BorderLayout.SOUTH);
     }
 
@@ -596,13 +613,14 @@ public class GUI extends JFrame {
         JButton unpauseForPlaylist = new JButton("Unpause");
         JButton nextForPlaylist = new JButton("Next");
         JButton previousForPlaylist = new JButton("Previous");
+        JSlider playlistSlider = new JSlider(0, 100, 20);
         MusicPlayer playlistPlayer = new MusicPlayer();
 
         // Add components to the panel for the playlist window
         panelForPlaylist.setLayout(new BorderLayout());
         buildMenu(menuBarForPlaylist, playlistWindow, tableModelForPlaylist, songTableForPlaylist, playlistPlayer, playlistName);
         buildSongLibrary(songTableForPlaylist, songTableScrollPaneForPlaylist, playlistWindow, tableModelForPlaylist, playlistPlayer, playlistName);
-        buildButtonPanel(songTableForPlaylist, buttonPanelForPlaylist, playlistWindow, playForPlaylist, stopForPlaylist, pauseForPlaylist, unpauseForPlaylist, nextForPlaylist, previousForPlaylist, playlistPlayer);
+        buildButtonPanel(songTableForPlaylist, buttonPanelForPlaylist, playlistWindow, playForPlaylist, stopForPlaylist, pauseForPlaylist, unpauseForPlaylist, nextForPlaylist, previousForPlaylist, playlistPlayer, playlistSlider);
 
         playlistWindow.setVisible(true);
 
