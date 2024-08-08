@@ -4,10 +4,10 @@ package mytunes;
  *
  * @author Jerry
  */
+import java.util.*;
 import java.util.List;
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.dnd.DnDConstants;
 import java.awt.dnd.DropTarget;
@@ -17,11 +17,8 @@ import java.awt.event.*;
 import javax.swing.*;
 import javax.swing.table.*;
 import java.io.File;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.util.Enumeration;
+import java.util.prefs.Preferences;
 import javafx.application.Platform;
-import static javax.swing.TransferHandler.COPY_OR_MOVE;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.ListSelectionEvent;
@@ -39,10 +36,12 @@ public class GUI extends JFrame {
     DefaultTableModel mainTableModel;
     MusicPlayer musicPlayer;
     JPopupMenu popupMenu, playlistPopupMenu;
+    JCheckBoxMenuItem artistItem, albumItem, yearItem, genreItem, commentItem;
     DefaultMutableTreeNode playlistRoot;
     DefaultTreeModel libraryTreeModel;
     JTree playlistTree;
     String playlistName;
+    Map<Integer, TableColumn> hiddenColumns;
 
     // Initialize components
     public GUI() {
@@ -85,6 +84,13 @@ public class GUI extends JFrame {
         next = new JButton("Next");
         previous = new JButton("Previous");
         volumeSlider = new JSlider(0, 100, 20);
+
+        artistItem = new JCheckBoxMenuItem("Artist", true);
+        albumItem = new JCheckBoxMenuItem("Album", true);
+        yearItem = new JCheckBoxMenuItem("Year", true);
+        genreItem = new JCheckBoxMenuItem("Genre", true);
+        commentItem = new JCheckBoxMenuItem("Comment", true);
+        hiddenColumns = new HashMap<>();
     }
 
     public void go() {
@@ -111,6 +117,16 @@ public class GUI extends JFrame {
 
         // Add SidePanel Component for main window
         buildSidePanel();
+
+        // Add Column Header Popup
+        JCheckBoxMenuItem[] menuItems = {artistItem, albumItem, yearItem, genreItem, commentItem};
+        buildTableHeaderPopup(mainSongTable, mainTableModel, menuItems);
+        
+        // Load Column configuration
+        loadColumnConfiguration(menuItems, mainSongTable, mainTableModel);
+        
+        // Shutdown hook to save column configuration
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> saveColumnConfiguration(menuItems)));
 
         this.setVisible(true);
     }
@@ -446,6 +462,141 @@ public class GUI extends JFrame {
         this.add(sidePanel, BorderLayout.WEST);
     }
 
+    private void buildTableHeaderPopup(JTable songTable, DefaultTableModel tableModel, JCheckBoxMenuItem[] menuItems) {
+        JPopupMenu headerPopup = new JPopupMenu();
+
+        // Add event handlers to each menuItem
+        for (JCheckBoxMenuItem menuItem : menuItems) {
+            // Add items to popup menu
+            headerPopup.add(menuItem);
+
+            // Add Event handler
+            menuItem.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    toggleColumnVisibility(songTable, tableModel, menuItem, menuItem.getText());
+                }
+            });
+
+        }
+
+        songTable.getTableHeader().addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    headerPopup.show(e.getComponent(), e.getX(), e.getY());
+                }
+            }
+        });
+    }
+
+    private void toggleColumnVisibility(JTable table, DefaultTableModel tableModel, JCheckBoxMenuItem menuItem, String columnName) {
+        TableColumnModel columnModel = table.getColumnModel();
+        int modelIndex = findColumnIndex(tableModel, columnName);
+
+        if (modelIndex > 0) { // Exclude "Title" column (index 0) from being toggled
+            if (menuItem.isSelected()) {
+                int viewIndex = table.convertColumnIndexToView(modelIndex);
+
+                if (viewIndex == -1) {
+                    // Column is hidden, so we need to make it visible again
+                    TableColumn column = getHiddenColumn(modelIndex);
+                    if (column != null) {
+                        int newPosition = findOriginalColumnPosition(columnModel, modelIndex);
+                        addColumnAtPosition(columnModel, column, newPosition);
+                    }
+                }
+            } else {
+                // Hide the column
+                int viewIndex = table.convertColumnIndexToView(modelIndex);
+                if (viewIndex != -1) {
+                    TableColumn column = columnModel.getColumn(viewIndex);
+                    columnModel.removeColumn(column);
+                    addHiddenColumn(column);
+                }
+            }
+        }
+    }
+
+    private void addColumnAtPosition(TableColumnModel columnModel, TableColumn newColumn, int position) {
+        if (position < 0 || position > columnModel.getColumnCount()) {
+            throw new IllegalArgumentException("Position out of range");
+        }
+
+        // Temporary list to hold columns
+        List<TableColumn> columns = new ArrayList<>();
+
+        // Remove columns and store them in the list
+        for (int i = 0; i < columnModel.getColumnCount(); i++) {
+            columns.add(columnModel.getColumn(i));
+        }
+
+        // Clear the existing columns from the model
+        for (TableColumn column : columns) {
+            columnModel.removeColumn(column);
+        }
+
+        // Add columns back in the desired order
+        for (int i = 0; i < columns.size(); i++) {
+            if (i == position) {
+                columnModel.addColumn(newColumn);
+            }
+            columnModel.addColumn(columns.get(i));
+        }
+
+        // If the position is at the end, add the new column
+        if (position >= columns.size()) {
+            columnModel.addColumn(newColumn);
+        }
+    }
+
+    private void addHiddenColumn(TableColumn column) {
+        hiddenColumns.put(column.getModelIndex(), column);
+    }
+
+    private TableColumn getHiddenColumn(int modelIndex) {
+        return hiddenColumns.remove(modelIndex);
+    }
+
+    private int findColumnIndex(DefaultTableModel tableModel, String columnName) {
+        for (int i = 0; i < tableModel.getColumnCount(); i++) {
+            if (tableModel.getColumnName(i).equals(columnName)) {
+                return i;
+            }
+        }
+        return -1; // Column not found
+    }
+
+    private int findOriginalColumnPosition(TableColumnModel columnModel, int modelIndex) {
+        for (int i = 1; i < columnModel.getColumnCount(); i++) { // Start from 1 to skip "Title"
+            TableColumn column = columnModel.getColumn(i);
+            if (column.getModelIndex() > modelIndex) {
+                return i;
+            }
+        }
+
+        // If no column has a higher model index, place it at the end
+        return columnModel.getColumnCount();
+    }
+    
+    private void saveColumnConfiguration(JCheckBoxMenuItem[] menuItems) {
+        Preferences prefs = Preferences.userNodeForPackage(GUI.class);
+        
+        for (JCheckBoxMenuItem item: menuItems) {
+            prefs.putBoolean(item.getText(), item.isSelected());
+        }
+    }
+    
+    private void loadColumnConfiguration(JCheckBoxMenuItem[] menuItems, JTable table, DefaultTableModel tableModel) {
+        Preferences prefs = Preferences.userNodeForPackage(GUI.class);
+        
+        for (JCheckBoxMenuItem item: menuItems) {
+            boolean isSelected = prefs.getBoolean(item.getText(), true);
+            item.setSelected(isSelected);
+            toggleColumnVisibility(table, tableModel, item, item.getText());
+        }
+    }
+
     private void setSongs(DefaultTableModel tableModel, MusicPlayer musicPlayer, String playlistName) {
         // Clear out existing rows
         tableModel.setRowCount(0);
@@ -614,6 +765,12 @@ public class GUI extends JFrame {
         JButton nextForPlaylist = new JButton("Next");
         JButton previousForPlaylist = new JButton("Previous");
         JSlider playlistSlider = new JSlider(0, 100, 20);
+        JCheckBoxMenuItem playlistArtistItem = new JCheckBoxMenuItem("Artist", true);
+        JCheckBoxMenuItem playlistAlbumItem = new JCheckBoxMenuItem("Album", true);
+        JCheckBoxMenuItem playlistYearItem = new JCheckBoxMenuItem("Year", true);
+        JCheckBoxMenuItem playlistGenreItem = new JCheckBoxMenuItem("Genre", true);
+        JCheckBoxMenuItem playlistCommentItem = new JCheckBoxMenuItem("Comment", true);
+        
         MusicPlayer playlistPlayer = new MusicPlayer();
 
         // Add components to the panel for the playlist window
@@ -621,6 +778,11 @@ public class GUI extends JFrame {
         buildMenu(menuBarForPlaylist, playlistWindow, tableModelForPlaylist, songTableForPlaylist, playlistPlayer, playlistName);
         buildSongLibrary(songTableForPlaylist, songTableScrollPaneForPlaylist, playlistWindow, tableModelForPlaylist, playlistPlayer, playlistName);
         buildButtonPanel(songTableForPlaylist, buttonPanelForPlaylist, playlistWindow, playForPlaylist, stopForPlaylist, pauseForPlaylist, unpauseForPlaylist, nextForPlaylist, previousForPlaylist, playlistPlayer, playlistSlider);
+        
+        // Add Column Header Popup
+        JCheckBoxMenuItem[] menuItems = {playlistArtistItem, playlistAlbumItem, playlistYearItem, playlistGenreItem, playlistCommentItem};
+        buildTableHeaderPopup(songTableForPlaylist, tableModelForPlaylist, menuItems);
+        loadColumnConfiguration(menuItems, songTableForPlaylist, tableModelForPlaylist);
 
         playlistWindow.setVisible(true);
 
