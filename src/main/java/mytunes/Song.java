@@ -113,10 +113,12 @@ public class Song {
         }
     }
     
-    public String getFileURL() throws IOException, URISyntaxException {
+    public String getFileURL(String songTitle) throws IOException, URISyntaxException {
+        String title = (songTitle != null) ? songTitle : this.title;
+        
         // Construct path from Downloads directory and append MP3 file to path
         Path path = Paths.get(System.getProperty("user.home"), "Downloads");
-        Path mp3FilePath = path.resolve(this.title + ".mp3");
+        Path mp3FilePath = path.resolve(title + ".mp3");
         
         // Convert file path to URI
         URI uri = mp3FilePath.toUri();

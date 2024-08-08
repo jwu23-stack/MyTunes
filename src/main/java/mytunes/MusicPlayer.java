@@ -72,7 +72,7 @@ public class MusicPlayer {
                     if (mediaPlayer != null && mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING) {
                         mediaPlayer.pause();
                     }
-                    media = new Media(selectedSong.getFileURL());
+                    media = new Media(selectedSong.getFileURL(selectedSong.getTitle()));
                     mediaPlayer = new MediaPlayer(media);
                     mediaPlayer.play();
                 } catch (Exception e) {
@@ -174,5 +174,13 @@ public class MusicPlayer {
     
     public boolean addToPlaylist(String songTitle, String playlistName) {
         return dbManager.addToPlaylist(songTitle, playlistName);
+    }
+    
+    public boolean deletePlaylist(int playlistId) {
+        return dbManager.deletePlaylistById(playlistId);
+    }
+    
+    public int findPlaylist(String playlistName) {
+        return dbManager.findPlaylistIdByName(playlistName);
     }
 }

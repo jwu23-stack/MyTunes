@@ -163,7 +163,7 @@ public class DatabaseManager {
         return false;
     }
    
-    private int findPlaylistIdByName(String playlistName) {
+    public int findPlaylistIdByName(String playlistName) {
         // Prepare query to prevent SQL Injection
         String query = "SELECT id FROM playlists WHERE name = ?";
         
@@ -181,7 +181,7 @@ public class DatabaseManager {
         return -1; // playlist not found
     }
     
-    private int findSongIdByName(String songTitle) {
+    public int findSongIdByName(String songTitle) {
         // Prepare query to prevent SQL Injection
         String query = "SELECT id FROM songs WHERE title = ?";
         
@@ -197,5 +197,21 @@ public class DatabaseManager {
             e.printStackTrace();
         }
         return -1; // song not found
+    }
+    
+    public boolean deletePlaylistById(int playlistId) {
+        // Prepare qurey to prevent SQL Injection
+        String query = "DELETE FROM playlists WHERE id = ?";
+        
+        try (Connection connection = connect(); PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setInt(1, playlistId);
+            
+            // Excute query
+            int rowsAffected = statement.executeUpdate();
+            return (rowsAffected > 0);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 }
