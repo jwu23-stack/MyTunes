@@ -223,6 +223,10 @@ public class GUI extends JFrame {
         headerRenderer.setForeground(Color.BLACK);
         songTable.getTableHeader().setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
         songTable.getTableHeader().setDefaultRenderer(headerRenderer);
+        
+        // Enable column sorting on all columns
+        TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(tableModel);
+        songTable.setRowSorter(sorter);
 
         // Load song data from database
         setSongs(tableModel, musicPlayer, playlistName);
@@ -247,6 +251,25 @@ public class GUI extends JFrame {
                         Song selectedSong = musicPlayer.findSongByTitle(title);
                         if (selectedSong != null) {
                             musicPlayer.setSelectedSong(selectedSong, selectedRow);
+                        }
+                    }
+                }
+            }
+        });
+        
+        songTable.getTableHeader().addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    int column = songTable.columnAtPoint(e.getPoint());
+                    if (column != -1) {
+                        List<? extends RowSorter.SortKey> sortKeys = sorter.getSortKeys();
+                        
+                        if (!sortKeys.isEmpty() && sortKeys.get(0).getColumn() == column) {
+                            sorter.toggleSortOrder(column);
+                        } else {
+                            // Sort this column in ascending order
+                            sorter.setSortKeys(Collections.singletonList(new RowSorter.SortKey(column, SortOrder.ASCENDING)));
                         }
                     }
                 }
