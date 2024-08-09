@@ -22,7 +22,7 @@ public class DatabaseManager {
     // Return the list of songs from SQL Database
     public List<Song> getAllSongs() {
         List<Song> songs = new ArrayList<>();
-        String query = "SELECT title, artist, album, year, genre, comment FROM songs";
+        String query = "SELECT title, artist, album, year, genre, comment FROM songs ORDER BY title ASC";
 
         try (Connection connection = connect(); Statement statement = connection.createStatement(); ResultSet resultSet = statement.executeQuery(query)) {
 
@@ -114,7 +114,7 @@ public class DatabaseManager {
     public List<Song> getPlaylistSongs(String playlistName) {
         List<Song> songs = new ArrayList<>();
         // Prepare query to prevent SQL Injection
-        String query = "SELECT s.* FROM songs AS s JOIN playlists_songs AS ps ON s.id = ps.song_id JOIN playlists AS p ON ps.playlist_id = p.id WHERE p.name = ?";
+        String query = "SELECT s.* FROM songs AS s JOIN playlists_songs AS ps ON s.id = ps.song_id JOIN playlists AS p ON ps.playlist_id = p.id WHERE p.name = ? ORDER BY s.title ASC";
         
         try (Connection connection = connect(); PreparedStatement statement = connection.prepareStatement(query)) {
             statement.setString(1, playlistName);
