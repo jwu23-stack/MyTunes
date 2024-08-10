@@ -16,6 +16,7 @@ import java.awt.dnd.DropTargetAdapter;
 import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.*;
 import javax.swing.*;
+import javax.swing.Timer;
 import javax.swing.table.*;
 import java.io.File;
 import java.util.prefs.Preferences;
@@ -27,17 +28,18 @@ import javax.swing.event.ListSelectionListener;
 import javax.swing.tree.*;
 
 public class GUI extends JFrame {
-    JPanel mainPanel, mainButtonPanel, sidePanel;
+    JPanel mainPanel, mainTimerPanel, mainButtonPanel, sidePanel;
     JButton play, stop, pause, unpause, next, previous;
     JSlider volumeSlider;
     JMenuBar mainMenubar;
     JTable mainSongTable;
     JScrollPane mainSongTableScrollPane;
     DefaultTableModel mainTableModel;
-    JLabel mainVolumeLabel;
+    JLabel mainVolumeLabel, mainElapsedTimeLabel, mainRemainingTimeLabel;
     MusicPlayer musicPlayer;
     JPopupMenu popupMenu, playlistPopupMenu;
     JCheckBoxMenuItem artistItem, albumItem, yearItem, genreItem, commentItem;
+    JProgressBar mainProgressBar;
     DefaultMutableTreeNode playlistRoot;
     DefaultTreeModel libraryTreeModel;
     JTree playlistTree;
@@ -94,6 +96,11 @@ public class GUI extends JFrame {
         genreItem = new JCheckBoxMenuItem("Genre", true);
         commentItem = new JCheckBoxMenuItem("Comment", true);
         hiddenColumns = new HashMap<>();
+        
+        mainTimerPanel = new JPanel(new FlowLayout());
+        mainProgressBar = new JProgressBar(0, 100);
+        mainElapsedTimeLabel = new JLabel("0:00:00");
+        mainRemainingTimeLabel = new JLabel("0:00:00");
 
         playlistTableModels = new HashMap<>();
     }
@@ -119,7 +126,7 @@ public class GUI extends JFrame {
         mainSongTable.setTransferHandler(new SongTransferHandler());
 
         // Add Button Panel for main window
-        buildButtonPanel(mainSongTable, mainButtonPanel, this, play, stop, pause, unpause, next, previous, musicPlayer, mainVolumeLabel, volumeSlider);
+        buildButtonPanel(mainSongTable, mainButtonPanel, mainTimerPanel, this, play, stop, pause, unpause, next, previous, musicPlayer, mainVolumeLabel, volumeSlider, mainProgressBar, mainElapsedTimeLabel, mainRemainingTimeLabel);
 
         // Add Popup Component for main window
         buildPopup(mainSongTable, mainTableModel, musicPlayer, "");
@@ -214,7 +221,7 @@ public class GUI extends JFrame {
         menubar.add(fileMenu);
         frame.setJMenuBar(menubar);
     }
-
+    
     private void buildSongLibrary(JTable songTable, JScrollPane songTableScrollPane, JFrame frame, DefaultTableModel tableModel, MusicPlayer musicPlayer, String playlistName) {
         // Adjust header render
         DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
@@ -283,10 +290,11 @@ public class GUI extends JFrame {
         frame.add(songTableScrollPane, BorderLayout.CENTER);
     }
 
-    private void buildButtonPanel(JTable songTable, JPanel panel, JFrame frame, JButton play, JButton stop, JButton pause, JButton unpause, JButton next, JButton previous, MusicPlayer musicPlayer, JLabel volumeLabel, JSlider volumeSlider) {
-        // Hide volume slider before song selection
+    private void buildButtonPanel(JTable songTable, JPanel panel, JPanel timerPanel, JFrame frame, JButton play, JButton stop, JButton pause, JButton unpause, JButton next, JButton previous, MusicPlayer musicPlayer, JLabel volumeLabel, JSlider volumeSlider, JProgressBar progressBar, JLabel elapsedTime, JLabel remainingTime) {
+        // Hide volume slider and progress bar before song selection
         volumeLabel.setVisible(false);
         volumeSlider.setVisible(false);
+        timerPanel.setVisible(false);
 
         // Event handlers
         previous.addActionListener(new ActionListener() {
@@ -306,6 +314,7 @@ public class GUI extends JFrame {
             public void actionPerformed(ActionEvent e) {
                 if (musicPlayer.getSelectedSong() != null) {
                     musicPlayer.playSong();
+                    updateProgress(musicPlayer, elapsedTime, remainingTime, progressBar);
                 } else {
                     JOptionPane.showMessageDialog(null, "No song selected.", "Error", JOptionPane.ERROR_MESSAGE);
                 }
@@ -361,27 +370,39 @@ public class GUI extends JFrame {
                     if (selectedRow != -1) {
                         volumeLabel.setVisible(true);
                         volumeSlider.setVisible(true);
+                        timerPanel.setVisible(true);
                     } else {
                         volumeLabel.setVisible(false);
                         volumeSlider.setVisible(false);
+                        timerPanel.setVisible(false);
                     }
                 }
             }
         });
 
-        panel.setLayout(new FlowLayout());
+        panel.setLayout(new BorderLayout());
         panel.setBackground(Color.LIGHT_GRAY);
+        
+        // Add song progress bar and timers into panel
+        progressBar.setPreferredSize(new Dimension(600, 20));
+        timerPanel.add(elapsedTime);
+        timerPanel.add(progressBar);
+        timerPanel.add(remainingTime);
+        panel.add(timerPanel, BorderLayout.NORTH);
 
+        JPanel buttonPanel = new JPanel(new FlowLayout());
         volumeSlider.setMajorTickSpacing(10);
         volumeSlider.setMinorTickSpacing(1);
-        panel.add(previous);
-        panel.add(play);
-        panel.add(stop);
-        panel.add(pause);
-        panel.add(unpause);
-        panel.add(next);
-        panel.add(volumeLabel);
-        panel.add(volumeSlider);
+        buttonPanel.add(previous);
+        buttonPanel.add(play);
+        buttonPanel.add(stop);
+        buttonPanel.add(pause);
+        buttonPanel.add(unpause);
+        buttonPanel.add(next);
+        buttonPanel.add(volumeLabel);
+        buttonPanel.add(volumeSlider);
+        panel.add(buttonPanel, BorderLayout.CENTER);
+        
         frame.add(panel, BorderLayout.SOUTH);
     }
 
@@ -827,14 +848,19 @@ public class GUI extends JFrame {
         JCheckBoxMenuItem playlistYearItem = new JCheckBoxMenuItem("Year", true);
         JCheckBoxMenuItem playlistGenreItem = new JCheckBoxMenuItem("Genre", true);
         JCheckBoxMenuItem playlistCommentItem = new JCheckBoxMenuItem("Comment", true);
+        JPanel playlistTimerPanel = new JPanel(new FlowLayout());
+        JProgressBar playlistProgressBar = new JProgressBar(0, 100);
+        JLabel playlistElapsedTimeLabel = new JLabel("0:00:00");
+        JLabel playlistRemainingTimeLabel = new JLabel("0:00:00");
+        
 
-        MusicPlayer playlistPlayer = new MusicPlayer();
+        MusicPlayer playlistPlayer = new MusicPlayer(); 
 
         // Add components to the panel for the playlist window
         panelForPlaylist.setLayout(new BorderLayout());
         buildMenu(menuBarForPlaylist, playlistWindow, tableModelForPlaylist, songTableForPlaylist, playlistPlayer, playlistName);
         buildSongLibrary(songTableForPlaylist, songTableScrollPaneForPlaylist, playlistWindow, tableModelForPlaylist, playlistPlayer, playlistName);
-        buildButtonPanel(songTableForPlaylist, buttonPanelForPlaylist, playlistWindow, playForPlaylist, stopForPlaylist, pauseForPlaylist, unpauseForPlaylist, nextForPlaylist, previousForPlaylist, playlistPlayer, playlistVolumeLabel, playlistSlider);
+        buildButtonPanel(songTableForPlaylist, buttonPanelForPlaylist, playlistTimerPanel, playlistWindow, playForPlaylist, stopForPlaylist, pauseForPlaylist, unpauseForPlaylist, nextForPlaylist, previousForPlaylist, playlistPlayer, playlistVolumeLabel, playlistSlider, playlistProgressBar, playlistElapsedTimeLabel, playlistRemainingTimeLabel);
 
         // Add Column Header Popup
         JCheckBoxMenuItem[] menuItems = {playlistArtistItem, playlistAlbumItem, playlistYearItem, playlistGenreItem, playlistCommentItem};
@@ -975,6 +1001,42 @@ public class GUI extends JFrame {
                 }
             }
         }
+    }
+    
+    private void updateProgress(MusicPlayer musicPlayer, JLabel elapsedTimeLabel, JLabel remaingTimeLabel, JProgressBar progressBar) {
+        Timer timer = new Timer(1000, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                // Get current elapsed time
+                int elapsedTime = musicPlayer.getElapsedTime();
+                int songLength = musicPlayer.getSongLength();
+                
+                // Update elapsed time label
+                elapsedTimeLabel.setText(formatTime(elapsedTime));
+                
+                // Update remaining time label
+                remaingTimeLabel.setText(formatTime(songLength - elapsedTime));
+                
+                // Update progress bar
+                int progress = (int) ((double) elapsedTime / songLength * 100);
+                progressBar.setValue(progress);
+                
+                if (elapsedTime >= songLength) {
+                    ((Timer) e.getSource()).stop();
+                    progressBar.setValue(100);
+                    progressBar.setValue(0);
+                    elapsedTimeLabel.setText("0:00:00");
+                }
+            }
+        });
+        timer.start();
+    }
+    
+    private String formatTime(int seconds) {
+        int hours = seconds / 3600;
+        int minutes = (seconds % 3600) / 60;
+        int secs = seconds % 60;
+        return String.format("%d:%02d:%02d", hours, minutes, secs);
     }
 
     class PlaylistNode extends DefaultMutableTreeNode {

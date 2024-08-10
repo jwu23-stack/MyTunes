@@ -8,6 +8,7 @@ import java.util.List;
 import java.io.File;
 import javafx.application.Platform;
 import javafx.scene.media.*;
+import javafx.util.Duration;
 
 public class MusicPlayer {
     private DatabaseManager dbManager;
@@ -189,5 +190,21 @@ public class MusicPlayer {
 
     public int findPlaylist(String playlistName) {
         return dbManager.findPlaylistIdByName(playlistName);
+    }
+    
+    public int getElapsedTime() {
+        if (mediaPlayer != null) {
+            Duration currentTime = mediaPlayer.getCurrentTime();
+            return (int) currentTime.toSeconds();
+        }
+        return 0;
+    }
+    
+    public int getSongLength() {
+        if (mediaPlayer != null) {
+            Duration totalDuration = mediaPlayer.getTotalDuration();
+            return (int) totalDuration.toSeconds();
+        }
+        return 0;
     }
 }
