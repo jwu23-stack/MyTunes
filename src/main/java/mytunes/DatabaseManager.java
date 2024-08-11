@@ -84,7 +84,7 @@ public class DatabaseManager {
         String query = "SELECT name FROM playlists";
         
         try (Connection connection = connect(); Statement statement = connection.createStatement(); ResultSet resultSet = statement.executeQuery(query)) {
-
+            
             while (resultSet.next()) {
                 String playlistName = resultSet.getString("name");
                 playlists.add(playlistName);

@@ -68,9 +68,9 @@ public class MusicPlayer {
         if (selectedSong != null && selectedIndex >= 0) {
             Platform.runLater(() -> {
                 try {
-                    // Pause current media player if it's already playing
+                    // Stop current media player if it's already playing
                     if (mediaPlayer != null && mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING) {
-                        mediaPlayer.pause();
+                        mediaPlayer.stop();
                     }
                     media = new Media(selectedSong.getFileURL(selectedSong.getTitle()));
                     mediaPlayer = new MediaPlayer(media);
@@ -87,9 +87,9 @@ public class MusicPlayer {
     public void playSongFromFile(File mp3File) {
         Platform.runLater(() -> {
             try {
-                // Pause current media player if it's already playing
+                // Stop current media player if it's already playing
                 if (mediaPlayer != null && mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING) {
-                    mediaPlayer.pause();
+                    mediaPlayer.stop();
                 }
                 media = new Media(mp3File.toURI().toString());
                 mediaPlayer = new MediaPlayer(media);
