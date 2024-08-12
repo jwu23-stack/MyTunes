@@ -15,10 +15,15 @@ import java.awt.dnd.DropTarget;
 import java.awt.dnd.DropTargetAdapter;
 import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.*;
+import java.io.BufferedReader;
 import javax.swing.*;
 import javax.swing.Timer;
 import javax.swing.table.*;
 import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.prefs.Preferences;
 import javafx.application.Platform;
 import javax.swing.event.ChangeEvent;
@@ -28,10 +33,12 @@ import javax.swing.event.ListSelectionListener;
 import javax.swing.tree.*;
 
 public class GUI extends JFrame {
+
     JPanel mainPanel, mainTimerPanel, mainButtonPanel, sidePanel;
     JButton play, stop, pause, unpause, next, previous;
     JSlider volumeSlider;
     JMenuBar mainMenubar;
+    JMenu playRecentSong;
     JTable mainSongTable;
     JScrollPane mainSongTableScrollPane;
     DefaultTableModel mainTableModel;
@@ -46,11 +53,13 @@ public class GUI extends JFrame {
     String playlistName;
     Map<Integer, TableColumn> hiddenColumns;
     Map<String, DefaultTableModel> playlistTableModels;
+    List<Song> recentSongs;
 
     // Initialize components
     public GUI() {
         mainPanel = new JPanel();
         mainMenubar = new JMenuBar();
+        playRecentSong = new JMenu("Play Recent");
         musicPlayer = new MusicPlayer();
         mainPopupMenu = new JPopupMenu();
         playlistPopupMenu = new JPopupMenu();
@@ -96,13 +105,14 @@ public class GUI extends JFrame {
         genreItem = new JCheckBoxMenuItem("Genre", true);
         commentItem = new JCheckBoxMenuItem("Comment", true);
         hiddenColumns = new HashMap<>();
-        
+
         mainTimerPanel = new JPanel(new FlowLayout());
         mainProgressBar = new JProgressBar(0, 100);
         mainElapsedTimeLabel = new JLabel("0:00:00");
         mainRemainingTimeLabel = new JLabel("0:00:00");
 
         playlistTableModels = new HashMap<>();
+        recentSongs = new ArrayList<>();
     }
 
     public void go() {
@@ -116,7 +126,7 @@ public class GUI extends JFrame {
         this.add(mainPanel);
 
         // Add Menu Component for main window
-        buildMenu(mainMenubar, this, mainTableModel, mainSongTable, musicPlayer, playlistName);
+        buildMenu(mainMenubar, playRecentSong, this, mainTableModel, mainSongTable, musicPlayer, playlistName, volumeSlider, mainProgressBar, mainElapsedTimeLabel, mainRemainingTimeLabel);
 
         // Add SongTable Component for main window
         buildSongLibrary(mainSongTable, mainSongTableScrollPane, this, mainTableModel, musicPlayer, playlistName, mainPopupMenu);
@@ -126,7 +136,7 @@ public class GUI extends JFrame {
         mainSongTable.setTransferHandler(new SongTransferHandler());
 
         // Add Button Panel for main window
-        buildButtonPanel(mainSongTable, mainButtonPanel, mainTimerPanel, this, play, stop, pause, unpause, next, previous, musicPlayer, mainVolumeLabel, volumeSlider, mainProgressBar, mainElapsedTimeLabel, mainRemainingTimeLabel);
+        buildButtonPanel(mainSongTable, playRecentSong, mainButtonPanel, mainTimerPanel, this, play, stop, pause, unpause, next, previous, musicPlayer, mainVolumeLabel, volumeSlider, mainProgressBar, mainElapsedTimeLabel, mainRemainingTimeLabel);
 
         // Add Popup Component for main window
         buildPopup(mainSongTable, mainTableModel, musicPlayer, "", mainPopupMenu);
@@ -141,13 +151,25 @@ public class GUI extends JFrame {
         // Load Column configuration
         loadColumnConfiguration(menuItems, mainSongTable, mainTableModel);
 
+        // Load Recent Songs 
+        recentSongs = loadRecentSongs();
+        musicPlayer.setRecentSongs(recentSongs);
+        refreshRecentSongsMenu(playRecentSong, mainSongTable, musicPlayer, mainProgressBar, mainElapsedTimeLabel, mainRemainingTimeLabel);
+
         // Shutdown hook to save column configuration
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> saveColumnConfiguration(menuItems)));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            saveColumnConfiguration(menuItems);
+            saveRecentSongs(recentSongs);
+        }));
 
         this.setVisible(true);
     }
 
-    private void buildMenu(JMenuBar menubar, JFrame frame, DefaultTableModel tableModel, JTable songTable, MusicPlayer musicPlayer, String playlistName) {
+    private void buildMenu(JMenuBar menubar, JMenu playRecentSong, JFrame frame, DefaultTableModel tableModel, JTable songTable, MusicPlayer musicPlayer, String playlistName, JSlider volumeSlider, JProgressBar progressBar, JLabel elapsedTime, JLabel remainingTime) {
+        // Clear existing items
+        menubar.removeAll();
+
+        // File Menu
         JMenu fileMenu = new JMenu("File");
         JMenuItem createPlaylist = new JMenuItem("Create Playlist");
         JMenuItem openAndPlay = new JMenuItem("Open Song");
@@ -174,14 +196,14 @@ public class GUI extends JFrame {
                         TreePath newPath = new TreePath(newPlaylist.getPath());
                         playlistTree.setSelectionPath(newPath);
                         playlistTree.scrollPathToVisible(newPath);
-                        
+
                         // Add playlist table model to hashmap
                         DefaultTableModel tableModelForNewPlaylist = new DefaultTableModel(new String[]{"Title", "Artist", "Album", "Year", "Genre", "Comment"}, 0);
                         playlistTableModels.put(playlistName, tableModelForNewPlaylist);
 
                         // Fetch and display the songs of new playlist in songTable
                         setSongs(tableModel, musicPlayer, playlistName);
-                        
+
                         // Refresh the popup menu
                         buildPopup(mainSongTable, mainTableModel, musicPlayer, playlistName, mainPopupMenu);
                     } else {
@@ -226,9 +248,199 @@ public class GUI extends JFrame {
         fileMenu.addSeparator();
         fileMenu.add(exit);
         menubar.add(fileMenu);
+
+        // Controls menu
+        JMenu controlsMenu = new JMenu("Controls");
+        JMenuItem playSong = new JMenuItem("Play");
+        JMenuItem nextSong = new JMenuItem("Next");
+        JMenuItem previousSong = new JMenuItem("Previous");
+        JMenuItem goToCurrentSong = new JMenuItem("Go to Current Song");
+        JMenuItem increaseVolume = new JMenuItem("Increase Volume");
+        JMenuItem decreaseVolume = new JMenuItem("Decrease Volume");
+        JCheckBoxMenuItem shuffle = new JCheckBoxMenuItem("Shuffle", false);
+        JCheckBoxMenuItem repeatSong = new JCheckBoxMenuItem("Repeat", false);
+
+        // Event handlers with accelerator keys
+        // Accelerator key (space)
+        playSong.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0));
+        playSong.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                // Play first song in library if selected song is not present
+                if (musicPlayer.getSelectedSong() == null) {
+                    if (songTable.getRowCount() > 0) {
+                        String firstSongTitle = songTable.getValueAt(0, 0).toString();
+                        Song firstSong = musicPlayer.findSongByTitle(firstSongTitle);
+
+                        if (firstSong != null) {
+                            musicPlayer.setSelectedSong(firstSong, 0);
+                        }
+                    }
+                }
+
+                musicPlayer.playSong();
+                updateProgress(musicPlayer, elapsedTime, remainingTime, progressBar);
+
+                // Update "Play Recent" Menu
+                refreshRecentSongsMenu(playRecentSong, songTable, musicPlayer, progressBar, elapsedTime, remainingTime);
+            }
+        });
+
+        // Accelerator key (ctrl-right arrow)
+        nextSong.setAccelerator(KeyStroke.getKeyStroke("control RIGHT"));
+        nextSong.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleNextSong(songTable, musicPlayer);
+
+                // Update "Play Recent" Menu
+                refreshRecentSongsMenu(playRecentSong, songTable, musicPlayer, progressBar, elapsedTime, remainingTime);
+            }
+        });
+
+        // Accelerator key (ctrl-left arrow)
+        previousSong.setAccelerator(KeyStroke.getKeyStroke("control LEFT"));
+        previousSong.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handlePreviousSong(songTable, musicPlayer);
+
+                // Update "Play Recent" Menu
+                refreshRecentSongsMenu(playRecentSong, songTable, musicPlayer, progressBar, elapsedTime, remainingTime);
+            }
+        });
+        
+        // Accelerator key (ctrl-L)
+        goToCurrentSong.setAccelerator(KeyStroke.getKeyStroke("control L"));
+        goToCurrentSong.addActionListener(new ActionListener() {
+           @Override
+           public void actionPerformed(ActionEvent e) {
+               int selectedRow = -1;
+               
+               Song currentSong = musicPlayer.getSelectedSong();
+               
+               if (currentSong != null) {
+                   int rowCount = songTable.getRowCount();
+                   for (int i = 0; i < rowCount; i++) {
+                        String titleInTable = songTable.getValueAt(i, 0).toString();
+                        if (titleInTable.equals(currentSong.getTitle())) {
+                            selectedRow = i;
+                            break;
+                        }
+                   }
+               } else if (songTable.getSelectedRow() != -1) {
+                   selectedRow = songTable.getSelectedRow();
+               }
+               
+               if (selectedRow != -1) {
+                   songTable.setRowSelectionInterval(selectedRow, selectedRow);
+                   songTable.scrollRectToVisible(songTable.getCellRect(selectedRow, 0, true));
+               }
+           }
+        });
+
+        // Accelerator key (crtl-I)
+        increaseVolume.setAccelerator(KeyStroke.getKeyStroke("control I"));
+        increaseVolume.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                int currentVolume = musicPlayer.getVolume();
+
+                // Increase volume by 5%;
+                int newVolume = Math.min(currentVolume + 5, 100);
+                musicPlayer.setVolume(newVolume);
+                volumeSlider.setValue(newVolume);
+            }
+        });
+
+        // Accelerator key (crtl-D)
+        decreaseVolume.setAccelerator(KeyStroke.getKeyStroke("control D"));
+        decreaseVolume.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                int currentVolume = musicPlayer.getVolume();
+
+                // Decrease volume by 5%
+                int newVolume = Math.max(0, currentVolume - 5);
+                musicPlayer.setVolume(newVolume);
+                volumeSlider.setValue(newVolume);
+            }
+        });
+
+        shuffle.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                musicPlayer.toggleShuffle();
+
+                if (!musicPlayer.isPlaying() && musicPlayer.isShuffle()) {
+                    musicPlayer.playSong();
+                }
+            }
+        });
+
+        repeatSong.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                musicPlayer.toggleRepeat();
+            }
+        });
+
+        controlsMenu.add(playSong);
+        controlsMenu.add(nextSong);
+        controlsMenu.add(previousSong);
+        controlsMenu.add(playRecentSong);
+        controlsMenu.add(goToCurrentSong);
+        controlsMenu.addSeparator();
+        controlsMenu.add(increaseVolume);
+        controlsMenu.add(decreaseVolume);
+        controlsMenu.addSeparator();
+        controlsMenu.add(shuffle);
+        controlsMenu.add(repeatSong);
+        menubar.add(controlsMenu);
+
+        menubar.repaint();
+        menubar.revalidate();
+
         frame.setJMenuBar(menubar);
     }
-    
+
+    private void refreshRecentSongsMenu(JMenu playRecentSong, JTable songTable, MusicPlayer musicPlayer, JProgressBar progressBar, JLabel elapsedTime, JLabel remainingTime) {
+        SwingUtilities.invokeLater(() -> {
+            // Clear existing items
+            playRecentSong.removeAll();
+
+            // Populate "Play Recent" with recent songs
+            for (Song song : musicPlayer.getRecentSongs()) {
+                JMenuItem recentItem = new JMenuItem(song.getTitle());
+                recentItem.addActionListener(new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        // Find index of song with the matching title in table
+                        int rowCount = songTable.getRowCount();
+                        for (int i = 0; i < rowCount; i++) {
+                            String titleInTable = songTable.getValueAt(i, 0).toString();
+                            if (titleInTable.equals(song.getTitle())) {
+                                songTable.setRowSelectionInterval(i, i);
+                                musicPlayer.setSelectedSong(song, i);
+                                musicPlayer.playSong();
+                                updateProgress(musicPlayer, elapsedTime, remainingTime, progressBar);
+                                break;
+                            }
+                        }
+
+                        // Optionally refresh menu after selection
+                        SwingUtilities.invokeLater(() -> refreshRecentSongsMenu(playRecentSong, songTable, musicPlayer, progressBar, elapsedTime, remainingTime));
+                    }
+                });
+                playRecentSong.add(recentItem);
+            }
+
+            // Ensure the menu is repainted and revalidated
+            playRecentSong.revalidate();
+            playRecentSong.repaint();
+        });
+    }
+
     private void buildSongLibrary(JTable songTable, JScrollPane songTableScrollPane, JFrame frame, DefaultTableModel tableModel, MusicPlayer musicPlayer, String playlistName, JPopupMenu popupMenu) {
         // Adjust header render
         DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
@@ -237,7 +449,7 @@ public class GUI extends JFrame {
         headerRenderer.setForeground(Color.BLACK);
         songTable.getTableHeader().setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
         songTable.getTableHeader().setDefaultRenderer(headerRenderer);
-        
+
         // Enable column sorting on all columns
         TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(tableModel);
         songTable.setRowSorter(sorter);
@@ -274,7 +486,7 @@ public class GUI extends JFrame {
                 }
             }
         });
-        
+
         songTable.getTableHeader().addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -282,7 +494,7 @@ public class GUI extends JFrame {
                     int column = songTable.columnAtPoint(e.getPoint());
                     if (column != -1) {
                         List<? extends RowSorter.SortKey> sortKeys = sorter.getSortKeys();
-                        
+
                         if (!sortKeys.isEmpty() && sortKeys.get(0).getColumn() == column) {
                             sorter.toggleSortOrder(column);
                         } else {
@@ -301,7 +513,7 @@ public class GUI extends JFrame {
         frame.add(songTableScrollPane, BorderLayout.CENTER);
     }
 
-    private void buildButtonPanel(JTable songTable, JPanel panel, JPanel timerPanel, JFrame frame, JButton play, JButton stop, JButton pause, JButton unpause, JButton next, JButton previous, MusicPlayer musicPlayer, JLabel volumeLabel, JSlider volumeSlider, JProgressBar progressBar, JLabel elapsedTime, JLabel remainingTime) {
+    private void buildButtonPanel(JTable songTable, JMenu playRecentSong, JPanel panel, JPanel timerPanel, JFrame frame, JButton play, JButton stop, JButton pause, JButton unpause, JButton next, JButton previous, MusicPlayer musicPlayer, JLabel volumeLabel, JSlider volumeSlider, JProgressBar progressBar, JLabel elapsedTime, JLabel remainingTime) {
         // Hide volume slider and progress bar before song selection
         volumeLabel.setVisible(false);
         volumeSlider.setVisible(false);
@@ -311,12 +523,10 @@ public class GUI extends JFrame {
         previous.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                int currentRow = songTable.getSelectedRow();
-                // Calculate the previous row index, wrap around if necessary
-                int newRow = (currentRow - 1 + songTable.getRowCount()) % songTable.getRowCount();
-                musicPlayer.previousSong();
-                songTable.setRowSelectionInterval(newRow, newRow);
-                songTable.scrollRectToVisible(songTable.getCellRect(newRow, 0, true));
+                handlePreviousSong(songTable, musicPlayer);
+
+                // Update "Play Recent" Menu
+                refreshRecentSongsMenu(playRecentSong, songTable, musicPlayer, progressBar, elapsedTime, remainingTime);
             }
         });
 
@@ -326,6 +536,9 @@ public class GUI extends JFrame {
                 if (musicPlayer.getSelectedSong() != null) {
                     musicPlayer.playSong();
                     updateProgress(musicPlayer, elapsedTime, remainingTime, progressBar);
+
+                    // Update "Play Recent" Menu
+                    refreshRecentSongsMenu(playRecentSong, songTable, musicPlayer, progressBar, elapsedTime, remainingTime);
                 } else {
                     JOptionPane.showMessageDialog(null, "No song selected.", "Error", JOptionPane.ERROR_MESSAGE);
                 }
@@ -356,13 +569,12 @@ public class GUI extends JFrame {
         next.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                int currentRow = songTable.getSelectedRow();
-                // Calculate the next row index, wrap around if necessary
-                int newRow = (currentRow + 1) % songTable.getRowCount();
-                musicPlayer.nextSong();
-                songTable.setRowSelectionInterval(newRow, newRow);
-                songTable.scrollRectToVisible(songTable.getCellRect(newRow, 0, true));
+                handleNextSong(songTable, musicPlayer);
+
+                // Update "Play Recent" Menu
+                refreshRecentSongsMenu(playRecentSong, songTable, musicPlayer, progressBar, elapsedTime, remainingTime);
             }
+
         });
 
         volumeSlider.addChangeListener(new ChangeListener() {
@@ -372,7 +584,7 @@ public class GUI extends JFrame {
                 musicPlayer.setVolume(volume);
             }
         });
-        
+
         songTable.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
             @Override
             public void valueChanged(ListSelectionEvent e) {
@@ -393,7 +605,7 @@ public class GUI extends JFrame {
 
         panel.setLayout(new BorderLayout());
         panel.setBackground(Color.LIGHT_GRAY);
-        
+
         // Add song progress bar and timers into panel
         progressBar.setPreferredSize(new Dimension(600, 20));
         timerPanel.add(elapsedTime);
@@ -413,14 +625,32 @@ public class GUI extends JFrame {
         buttonPanel.add(volumeLabel);
         buttonPanel.add(volumeSlider);
         panel.add(buttonPanel, BorderLayout.CENTER);
-        
+
         frame.add(panel, BorderLayout.SOUTH);
+    }
+
+    private void handlePreviousSong(JTable songTable, MusicPlayer musicPlayer) {
+        int currentRow = songTable.getSelectedRow();
+        // Calculate the previous row index, wrap around if necessary
+        int newRow = (currentRow - 1 + songTable.getRowCount()) % songTable.getRowCount();
+        musicPlayer.previousSong();
+        songTable.setRowSelectionInterval(newRow, newRow);
+        songTable.scrollRectToVisible(songTable.getCellRect(newRow, 0, true));
+    }
+
+    private void handleNextSong(JTable songTable, MusicPlayer musicPlayer) {
+        int currentRow = songTable.getSelectedRow();
+        // Calculate the next row index, wrap around if necessary
+        int newRow = (currentRow + 1) % songTable.getRowCount();
+        musicPlayer.nextSong();
+        songTable.setRowSelectionInterval(newRow, newRow);
+        songTable.scrollRectToVisible(songTable.getCellRect(newRow, 0, true));
     }
 
     private void buildPopup(JTable songTable, DefaultTableModel tableModel, MusicPlayer musicPlayer, String playlistName, JPopupMenu popupMenu) {
         // Clear existing items
         popupMenu.removeAll();
-        
+
         JMenuItem addSong = new JMenuItem("Add song to Library");
         JMenu addToPlaylistMenu = new JMenu("Add to Playlist");
         JMenuItem deleteSong = new JMenuItem("Delete currently selected song");
@@ -681,6 +911,16 @@ public class GUI extends JFrame {
         }
     }
 
+    private void saveRecentSongs(List<Song> recentSongs) {
+        try (PrintWriter writer = new PrintWriter(new FileWriter("recentSongs.txt"))) {
+            for (Song song : recentSongs) {
+                writer.println(song.getTitle());
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     private void loadColumnConfiguration(JCheckBoxMenuItem[] menuItems, JTable table, DefaultTableModel tableModel) {
         Preferences prefs = Preferences.userNodeForPackage(GUI.class);
 
@@ -689,6 +929,22 @@ public class GUI extends JFrame {
             item.setSelected(isSelected);
             toggleColumnVisibility(table, tableModel, item, item.getText());
         }
+    }
+
+    private List<Song> loadRecentSongs() {
+        List<Song> recentSongs = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader("recentSongs.txt"))) {
+            String title;
+            while ((title = reader.readLine()) != null) {
+                Song song = musicPlayer.findSongByTitle(title);
+                if (song != null) {
+                    recentSongs.add(song);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return recentSongs;
     }
 
     private void setSongs(DefaultTableModel tableModel, MusicPlayer musicPlayer, String playlistName) {
@@ -767,7 +1023,7 @@ public class GUI extends JFrame {
 
                 // Refresh table
                 setSongs(tableModel, musicPlayer, playlistName);
-                
+
                 // Refresh popup menu
                 buildPopup(mainSongTable, mainTableModel, musicPlayer, playlistName, mainPopupMenu);
             } else {
@@ -850,13 +1106,14 @@ public class GUI extends JFrame {
 
         // Initialize components for the new window
         JPanel buttonPanelForPlaylist = new JPanel();
-        
+
         // Get Playlist model for JTable
         DefaultTableModel tableModelForPlaylist = playlistTableModels.get(playlistName);
         JTable songTableForPlaylist = new JTable(tableModelForPlaylist);
         songTableForPlaylist.setFillsViewportHeight(true);
         JScrollPane songTableScrollPaneForPlaylist = new JScrollPane(songTableForPlaylist);
         JMenuBar menuBarForPlaylist = new JMenuBar();
+        JMenu playlistPlayRecent = new JMenu("Play Recent");
         JPopupMenu popupMenuForPlaylist = new JPopupMenu();
         JButton playForPlaylist = new JButton("Play");
         JButton stopForPlaylist = new JButton("Stop");
@@ -875,15 +1132,14 @@ public class GUI extends JFrame {
         JProgressBar playlistProgressBar = new JProgressBar(0, 100);
         JLabel playlistElapsedTimeLabel = new JLabel("0:00:00");
         JLabel playlistRemainingTimeLabel = new JLabel("0:00:00");
-        
 
-        MusicPlayer playlistPlayer = new MusicPlayer(); 
+        MusicPlayer playlistPlayer = new MusicPlayer();
 
         // Add components to the panel for the playlist window
         panelForPlaylist.setLayout(new BorderLayout());
-        buildMenu(menuBarForPlaylist, playlistWindow, tableModelForPlaylist, songTableForPlaylist, playlistPlayer, playlistName);
+        buildMenu(menuBarForPlaylist, playlistPlayRecent, playlistWindow, tableModelForPlaylist, songTableForPlaylist, playlistPlayer, playlistName, playlistSlider, playlistProgressBar, playlistElapsedTimeLabel, playlistRemainingTimeLabel);
         buildSongLibrary(songTableForPlaylist, songTableScrollPaneForPlaylist, playlistWindow, tableModelForPlaylist, playlistPlayer, playlistName, popupMenuForPlaylist);
-        buildButtonPanel(songTableForPlaylist, buttonPanelForPlaylist, playlistTimerPanel, playlistWindow, playForPlaylist, stopForPlaylist, pauseForPlaylist, unpauseForPlaylist, nextForPlaylist, previousForPlaylist, playlistPlayer, playlistVolumeLabel, playlistSlider, playlistProgressBar, playlistElapsedTimeLabel, playlistRemainingTimeLabel);
+        buildButtonPanel(songTableForPlaylist, playlistPlayRecent, buttonPanelForPlaylist, playlistTimerPanel, playlistWindow, playForPlaylist, stopForPlaylist, pauseForPlaylist, unpauseForPlaylist, nextForPlaylist, previousForPlaylist, playlistPlayer, playlistVolumeLabel, playlistSlider, playlistProgressBar, playlistElapsedTimeLabel, playlistRemainingTimeLabel);
 
         // Add Column Header Popup
         JCheckBoxMenuItem[] menuItems = {playlistArtistItem, playlistAlbumItem, playlistYearItem, playlistGenreItem, playlistCommentItem};
@@ -896,7 +1152,7 @@ public class GUI extends JFrame {
         if (playlistWindow.isVisible()) {
             setUpDropTarget(songTableForPlaylist, tableModelForPlaylist, playlistPlayer, playlistName);
         }
-        
+
         // Event Handler
         playlistWindow.addWindowListener(new WindowAdapter() {
             @Override
@@ -916,6 +1172,10 @@ public class GUI extends JFrame {
         for (String playlist : playlists) {
             PlaylistNode playlistNode = new PlaylistNode(playlist);
             playlistRoot.add(playlistNode);
+
+            // Add playlist tree model to hashmap
+            DefaultTableModel tableModelForNewPlaylist = new DefaultTableModel(new String[]{"Title", "Artist", "Album", "Year", "Genre", "Comment"}, 0);
+            playlistTableModels.put(playlist, tableModelForNewPlaylist);
         }
 
     }
@@ -934,24 +1194,6 @@ public class GUI extends JFrame {
             }
         }
         return null;
-    }
-
-    private void refreshPlaylistTable(String playlistName) {
-        DefaultTableModel model = playlistTableModels.get(playlistName);
-        if (model != null) {
-            model.setRowCount(0);
-            List<Song> songs = musicPlayer.getPlaylistSongs(playlistName);
-            for (Song song : songs) {
-                model.addRow(new Object[]{
-                    song.getTitle(),
-                    song.getArtist(),
-                    song.getAlbum(),
-                    song.getYear(),
-                    song.getGenre(),
-                    song.getComment()
-                });
-            }
-        }
     }
 
     private void setUpDropTarget(JComponent component, DefaultTableModel tableModel, MusicPlayer musicPlayer, String playlistName) {
@@ -974,7 +1216,7 @@ public class GUI extends JFrame {
                             if (!addedToPlaylist) {
                                 JOptionPane.showMessageDialog(null, "Failed to add the song " + songTitle + " to the playlist.", "Error", JOptionPane.ERROR_MESSAGE);
                             }
-                           
+
                         }
                         setSongs(tableModel, musicPlayer, playlistName);
                     }
@@ -1024,7 +1266,7 @@ public class GUI extends JFrame {
             }
         }
     }
-    
+
     private void updateProgress(MusicPlayer musicPlayer, JLabel elapsedTimeLabel, JLabel remaingTimeLabel, JProgressBar progressBar) {
         Timer timer = new Timer(1000, new ActionListener() {
             @Override
@@ -1032,17 +1274,17 @@ public class GUI extends JFrame {
                 // Get current elapsed time
                 int elapsedTime = musicPlayer.getElapsedTime();
                 int songLength = musicPlayer.getSongLength();
-                
+
                 // Update elapsed time label
                 elapsedTimeLabel.setText(formatTime(elapsedTime));
-                
+
                 // Update remaining time label
                 remaingTimeLabel.setText(formatTime(songLength - elapsedTime));
-                
+
                 // Update progress bar
                 int progress = (int) ((double) elapsedTime / songLength * 100);
                 progressBar.setValue(progress);
-                
+
                 if (elapsedTime >= songLength) {
                     ((Timer) e.getSource()).stop();
                     progressBar.setValue(100);
@@ -1053,7 +1295,7 @@ public class GUI extends JFrame {
         });
         timer.start();
     }
-    
+
     private String formatTime(int seconds) {
         int hours = seconds / 3600;
         int minutes = (seconds % 3600) / 60;

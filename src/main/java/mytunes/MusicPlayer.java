@@ -6,6 +6,8 @@ package mytunes;
  */
 import java.util.List;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.LinkedList;
 import javafx.application.Platform;
 import javafx.scene.media.*;
 import javafx.util.Duration;
@@ -17,6 +19,10 @@ public class MusicPlayer {
     private Song selectedSong;
     private List<Song> songs;
     private int selectedIndex = 0; // Index of current song
+    private double currentVolume = 0.2; // Default volume
+    private List<Song> recentSongs = new LinkedList<>();
+    private boolean shuffle = false; 
+    private boolean repeat = false;
 
     public MusicPlayer() {
         dbManager = new DatabaseManager();
@@ -38,6 +44,10 @@ public class MusicPlayer {
     public void setSelectedSong(Song selectedSong, int selectedIndex) {
         this.selectedSong = selectedSong;
         this.selectedIndex = selectedIndex;
+    }
+    
+    public void setRecentSongs(List<Song> recentSongs) {
+        this.recentSongs = recentSongs;
     }
 
     public Song findSongByTitle(String title) {
@@ -66,6 +76,10 @@ public class MusicPlayer {
     }
 
     public void playSong() {
+        if (shuffle) { // Pick a random song
+            selectedIndex = (int) (Math.random() * songs.size());
+            selectedSong = songs.get(selectedIndex);
+        }
         if (selectedSong != null && selectedIndex >= 0) {
             Platform.runLater(() -> {
                 try {
@@ -75,7 +89,19 @@ public class MusicPlayer {
                     }
                     media = new Media(selectedSong.getFileURL(selectedSong.getTitle()));
                     mediaPlayer = new MediaPlayer(media);
+                    mediaPlayer.setVolume(currentVolume);
                     mediaPlayer.play();
+                    
+                    if (!shuffle) { // Don't add shuffled song to recentSongs
+                        addToRecentSongs(selectedSong);
+                    }
+                    
+                    // Repeat current song if repeat field is true
+                    mediaPlayer.setOnEndOfMedia(() -> {
+                       if (repeat) {
+                           playSong();
+                       } 
+                    });
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -83,6 +109,22 @@ public class MusicPlayer {
         } else {
             System.out.println("No song selected or invalid index");
         }
+    }
+    
+    public void addToRecentSongs(Song song) {
+        if (recentSongs.contains(song)) {
+            recentSongs.remove(song);
+        }
+        recentSongs.addFirst(song);
+        
+        // Only keep the most recent 10 songs
+        if (recentSongs.size() > 10) {
+            recentSongs.removeLast();
+        }
+    }
+    
+    public List<Song> getRecentSongs() {
+        return new ArrayList<>(recentSongs);
     }
 
     public void playSongFromFile(File mp3File) {
@@ -111,6 +153,10 @@ public class MusicPlayer {
     public boolean isPlaying() {
         return mediaPlayer.getStatus() == MediaPlayer.Status.PLAYING;
     }
+    
+    public boolean isShuffle() {
+        return shuffle;
+    }
 
     public void pausePlaying() {
         if (mediaPlayer != null) {
@@ -125,45 +171,55 @@ public class MusicPlayer {
     }
 
     public void nextSong() {
-        if (isPlaying()) { // Stop playing current song if needed
-            stopPlaying();
-        }
-
         selectedIndex++;
-        if (selectedIndex < songs.size()) { // Fetch next song in library
-            selectedSong = songs.get(selectedIndex);
-            setSelectedSong(selectedSong, selectedIndex);
-            playSong();
-        } else { // Loop back to first song if end of list
+        
+        if (selectedIndex >= songs.size()) { // Loop back to first song if end of list
             selectedIndex = 0;
-            selectedSong = songs.get(selectedIndex);
-            setSelectedSong(selectedSong, selectedIndex);
-            playSong();
         }
+        
+        // Select next song
+        selectedSong = songs.get(selectedIndex);
+        setSelectedSong(selectedSong, selectedIndex);
+        if (mediaPlayer != null) {
+            if (isPlaying()) { // Stop playing current song if needed
+                stopPlaying(); 
+            }
+        }
+        
+        playSong();
     }
 
     public void previousSong() {
-        if (isPlaying()) { // Stop playing current song if needed
-            stopPlaying();
-        }
-
         selectedIndex--;
-        if (selectedIndex >= 0) { // Fetch previous song in library
-            selectedSong = songs.get(selectedIndex);
-            setSelectedSong(selectedSong, selectedIndex);
-            playSong();
-        } else { // Loop back to last song if beginning of list
+        
+        if (selectedIndex < 0) { // Loop back to last song if beginning of list
             selectedIndex = songs.size() - 1;
-            selectedSong = songs.get(selectedIndex);
-            setSelectedSong(selectedSong, selectedIndex);
-            playSong();
         }
+        
+        // Select previous song
+        selectedSong = songs.get(selectedIndex);
+        setSelectedSong(selectedSong, selectedIndex);
+        
+        if (mediaPlayer != null) {
+            if (isPlaying()) {
+                stopPlaying();
+            }
+        }
+        
+        playSong();
+    }
+    
+    public int getVolume() {
+        if (mediaPlayer != null) {
+            return (int) (currentVolume * 100);
+        }
+        return 0; // Default value level if mediaPlayer is null
     }
 
     public void setVolume(int volume) {
         if (mediaPlayer != null) {
-            double volumeLevel = volume / 100.0;
-            mediaPlayer.setVolume(volumeLevel);
+            currentVolume = volume / 100.0;
+            mediaPlayer.setVolume(currentVolume);
         }
     }
 
@@ -206,5 +262,13 @@ public class MusicPlayer {
             return (int) totalDuration.toSeconds();
         }
         return 0;
+    }
+    
+    public void toggleShuffle() {
+        shuffle = !shuffle;
+    }
+    
+    public void toggleRepeat() {
+        repeat = !repeat;
     }
 }
