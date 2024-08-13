@@ -16,6 +16,7 @@ public class MusicPlayer {
     private Song selectedSong;
     private List<Song> songs;
     private int selectedIndex = 0; // Index of current song
+    private double currentVolume = 0.2; // Default volume
 
     public MusicPlayer() {
         dbManager = new DatabaseManager();
@@ -74,6 +75,7 @@ public class MusicPlayer {
                     }
                     media = new Media(selectedSong.getFileURL(selectedSong.getTitle()));
                     mediaPlayer = new MediaPlayer(media);
+                    mediaPlayer.setVolume(currentVolume);
                     mediaPlayer.play();
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -161,8 +163,8 @@ public class MusicPlayer {
 
     public void setVolume(int volume) {
         if (mediaPlayer != null) {
-            double volumeLevel = volume / 100.0;
-            mediaPlayer.setVolume(volumeLevel);
+            currentVolume = volume / 100.0;
+            mediaPlayer.setVolume(currentVolume);
         }
     }
 
