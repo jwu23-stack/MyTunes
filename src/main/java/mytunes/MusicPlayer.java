@@ -17,15 +17,25 @@ public class MusicPlayer {
     private MediaPlayer mediaPlayer; // Controls audio playback
     private Media media; // Holds media resource
     private Song selectedSong;
+    private Song previousSelectedSong;
     private List<Song> songs;
     private int selectedIndex = 0; // Index of current song
     private double currentVolume = 0.2; // Default volume
     private List<Song> recentSongs = new LinkedList<>();
     private boolean shuffle = false; 
     private boolean repeat = false;
+    private GUI gui;
 
     public MusicPlayer() {
         dbManager = new DatabaseManager();
+    }
+    
+    public MusicPlayer(GUI gui) {
+        this.gui = gui;
+    }
+    
+    public void setGUI(GUI gui) {
+        this.gui = gui;
     }
 
     public List<Song> getAllSongs() {
@@ -40,8 +50,13 @@ public class MusicPlayer {
     public int getSelectedIndex() {
         return selectedIndex;
     }
+    
+    public Song getPreviousSelectedSong() {
+        return previousSelectedSong;
+    }
 
     public void setSelectedSong(Song selectedSong, int selectedIndex) {
+        previousSelectedSong = this.selectedSong;
         this.selectedSong = selectedSong;
         this.selectedIndex = selectedIndex;
     }
@@ -91,16 +106,17 @@ public class MusicPlayer {
                     mediaPlayer = new MediaPlayer(media);
                     mediaPlayer.setVolume(currentVolume);
                     mediaPlayer.play();
+                    gui.updateSongTableAndProgressBar();
                     
                     if (!shuffle) { // Don't add shuffled song to recentSongs
                         addToRecentSongs(selectedSong);
                     }
                     
-                    // Repeat current song if repeat field is true
+                    // Play current or random song if repeat or shuffle field is true
                     mediaPlayer.setOnEndOfMedia(() -> {
-                       if (repeat) {
+                       if (repeat || shuffle) {
                            playSong();
-                       } 
+                       }
                     });
                 } catch (Exception e) {
                     e.printStackTrace();

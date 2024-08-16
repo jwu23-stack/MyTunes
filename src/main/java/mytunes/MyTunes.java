@@ -7,7 +7,9 @@ package mytunes;
 public class MyTunes {
 
     public static void main(String[] args) {
-        GUI gui = new GUI();
+        MusicPlayer musicPlayer = new MusicPlayer();
+        GUI gui = new GUI(musicPlayer);
+        musicPlayer.setGUI(gui);
         gui.go();
     }
 }

@@ -52,15 +52,16 @@ public class GUI extends JFrame {
     JTree playlistTree;
     String playlistName;
     Map<Integer, TableColumn> hiddenColumns;
+    Map<String, Boolean> columnVisibilityMap;
     Map<String, DefaultTableModel> playlistTableModels;
     List<Song> recentSongs;
 
     // Initialize components
-    public GUI() {
+    public GUI(MusicPlayer musicPlayer) {
         mainPanel = new JPanel();
         mainMenubar = new JMenuBar();
         playRecentSong = new JMenu("Play Recent");
-        musicPlayer = new MusicPlayer();
+        this.musicPlayer = musicPlayer;
         mainPopupMenu = new JPopupMenu();
         playlistPopupMenu = new JPopupMenu();
         playlistName = "";
@@ -112,6 +113,7 @@ public class GUI extends JFrame {
         mainRemainingTimeLabel = new JLabel("0:00:00");
 
         playlistTableModels = new HashMap<>();
+        columnVisibilityMap = new HashMap<>();
         recentSongs = new ArrayList<>();
     }
 
@@ -163,6 +165,22 @@ public class GUI extends JFrame {
         }));
 
         this.setVisible(true);
+    }
+    
+    public void updateSongTableAndProgressBar() {
+        if (mainSongTable != null && musicPlayer.getSelectedSong() != null) {
+            int rowCount = mainSongTable.getRowCount();
+            for (int i = 0; i < rowCount; i++) {
+                String titleInTable = (String) mainSongTable.getValueAt(i, 0);
+                if (titleInTable.equals(musicPlayer.getSelectedSong().getTitle())) {
+                    mainSongTable.setRowSelectionInterval(i, i);
+                    mainSongTable.scrollRectToVisible(mainSongTable.getCellRect(i, 0, true));
+                    break;
+                }
+            }
+        }
+        
+         updateProgress(musicPlayer, mainElapsedTimeLabel, mainRemainingTimeLabel, mainProgressBar);
     }
 
     private void buildMenu(JMenuBar menubar, JMenu playRecentSong, JFrame frame, DefaultTableModel tableModel, JTable songTable, MusicPlayer musicPlayer, String playlistName, JSlider volumeSlider, JProgressBar progressBar, JLabel elapsedTime, JLabel remainingTime) {
@@ -309,34 +327,38 @@ public class GUI extends JFrame {
                 refreshRecentSongsMenu(playRecentSong, songTable, musicPlayer, progressBar, elapsedTime, remainingTime);
             }
         });
-        
+
         // Accelerator key (ctrl-L)
         goToCurrentSong.setAccelerator(KeyStroke.getKeyStroke("control L"));
         goToCurrentSong.addActionListener(new ActionListener() {
-           @Override
-           public void actionPerformed(ActionEvent e) {
-               int selectedRow = -1;
-               
-               Song currentSong = musicPlayer.getSelectedSong();
-               
-               if (currentSong != null) {
-                   int rowCount = songTable.getRowCount();
-                   for (int i = 0; i < rowCount; i++) {
-                        String titleInTable = songTable.getValueAt(i, 0).toString();
-                        if (titleInTable.equals(currentSong.getTitle())) {
-                            selectedRow = i;
-                            break;
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                int selectedRow = -1;
+
+                if (musicPlayer.isPlaying()) {
+                    Song currentSong = musicPlayer.getPreviousSelectedSong();
+
+                    if (currentSong != null) {
+                        int rowCount = songTable.getRowCount();
+                        for (int i = 0; i < rowCount; i++) {
+                            String titleInTable = songTable.getValueAt(i, 0).toString();
+                            if (titleInTable.equals(currentSong.getTitle())) {
+                                selectedRow = i;
+                                break;
+                            }
                         }
-                   }
-               } else if (songTable.getSelectedRow() != -1) {
-                   selectedRow = songTable.getSelectedRow();
-               }
-               
-               if (selectedRow != -1) {
-                   songTable.setRowSelectionInterval(selectedRow, selectedRow);
-                   songTable.scrollRectToVisible(songTable.getCellRect(selectedRow, 0, true));
-               }
-           }
+                    }
+                } else {
+                    if (songTable.getSelectedRow() != -1) {
+                        selectedRow = songTable.getSelectedRow();
+                    }
+                }
+              
+                if (selectedRow != -1) {
+                    songTable.setRowSelectionInterval(selectedRow, selectedRow);
+                    songTable.scrollRectToVisible(songTable.getCellRect(selectedRow, 0, true));
+                }
+            }
         });
 
         // Accelerator key (crtl-I)
@@ -374,13 +396,38 @@ public class GUI extends JFrame {
 
                 if (!musicPlayer.isPlaying() && musicPlayer.isShuffle()) {
                     musicPlayer.playSong();
+                    updateProgress(musicPlayer, elapsedTime, remainingTime, progressBar);
+
+                    // Update song table selection view
+                    int selectedRow = -1;
+
+                    Song currentSong = musicPlayer.getSelectedSong();
+
+                    if (currentSong != null) {
+                        int rowCount = songTable.getRowCount();
+                        for (int i = 0; i < rowCount; i++) {
+                            String titleInTable = songTable.getValueAt(i, 0).toString();
+                            if (titleInTable.equals(currentSong.getTitle())) {
+                                selectedRow = i;
+                                break;
+                            }
+                        }
+                    } else if (songTable.getSelectedRow() != -1) {
+                        selectedRow = songTable.getSelectedRow();
+                    }
+
+                    if (selectedRow != -1) {
+                        songTable.setRowSelectionInterval(selectedRow, selectedRow);
+                        songTable.scrollRectToVisible(songTable.getCellRect(selectedRow, 0, true));
+                    }
                 }
             }
         });
 
         repeatSong.addActionListener(new ActionListener() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(ActionEvent e
+            ) {
                 musicPlayer.toggleRepeat();
             }
         });
@@ -830,6 +877,8 @@ public class GUI extends JFrame {
                         addColumnAtPosition(columnModel, column, newPosition);
                     }
                 }
+                // Update visibility state for opened windows (replaces old values)
+                columnVisibilityMap.put(columnName, true);
             } else {
                 // Hide the column
                 int viewIndex = table.convertColumnIndexToView(modelIndex);
@@ -838,6 +887,7 @@ public class GUI extends JFrame {
                     columnModel.removeColumn(column);
                     addHiddenColumn(column);
                 }
+                columnVisibilityMap.put(columnName, false);
             }
         }
     }
@@ -901,6 +951,34 @@ public class GUI extends JFrame {
 
         // If no column has a higher model index, place it at the end
         return columnModel.getColumnCount();
+    }
+
+    private void applyColumnVisibility(JTable table, DefaultTableModel tableModel, JCheckBoxMenuItem[] menuItems) {
+        for (int i = 1; i < tableModel.getColumnCount() - 1; i++) {
+            String columnName = table.getColumnName(i);
+            boolean isVisible = columnVisibilityMap.getOrDefault(columnName, true);
+
+            JCheckBoxMenuItem menuItem = getMenuItemForColumn(menuItems, columnName);
+            menuItem.setSelected(isVisible);
+
+            if (!isVisible) {
+                int viewIndex = table.convertColumnIndexToView(i);
+                if (viewIndex != -1) {
+                    TableColumn column = table.getColumnModel().getColumn(viewIndex);
+                    table.getColumnModel().removeColumn(column);
+                    addHiddenColumn(column);
+                }
+            }
+        }
+    }
+
+    private JCheckBoxMenuItem getMenuItemForColumn(JCheckBoxMenuItem[] menuItems, String columnName) {
+        for (JCheckBoxMenuItem menuItem : menuItems) {
+            if (menuItem.getText().equals(columnName)) {
+                return menuItem;
+            }
+        }
+        return null;
     }
 
     private void saveColumnConfiguration(JCheckBoxMenuItem[] menuItems) {
@@ -1145,6 +1223,9 @@ public class GUI extends JFrame {
         JCheckBoxMenuItem[] menuItems = {playlistArtistItem, playlistAlbumItem, playlistYearItem, playlistGenreItem, playlistCommentItem};
         buildTableHeaderPopup(songTableForPlaylist, tableModelForPlaylist, menuItems);
         loadColumnConfiguration(menuItems, songTableForPlaylist, tableModelForPlaylist);
+
+        // Apply column visibility state to playlist window's table
+        applyColumnVisibility(songTableForPlaylist, tableModelForPlaylist, menuItems);
 
         playlistWindow.setVisible(true);
 
